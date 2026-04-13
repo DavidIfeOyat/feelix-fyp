@@ -1,9 +1,10 @@
-﻿import { NextResponse, type NextRequest } from "next/server";
+﻿// proxy.ts
+import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 const PROTECTED_PREFIXES = ["/films", "/watchlist", "/group", "/profile", "/dashboard"];
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   let res = NextResponse.next();
 
   const supabase = createServerClient(
@@ -31,7 +32,6 @@ export async function middleware(req: NextRequest) {
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
 
-  // Guests never land on protected pages
   if (!user && isProtected) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
@@ -39,7 +39,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Logged-in users never see /login or /signup
   if (user && isAuthRoute) {
     const url = req.nextUrl.clone();
     url.pathname = "/";
@@ -50,13 +49,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Run middleware on all routes except:
-     * - static files
-     * - image optimization
-     * - favicon
-     */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
