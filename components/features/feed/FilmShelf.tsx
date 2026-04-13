@@ -1,134 +1,76 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import MovieCard, { type MovieItem } from "@/components/shared/MovieCard";
 
-type FilmsResponse = {
-  items: MovieItem[];
-  page: number;
-  totalPages: number;
-  error?: string;
-};
-
-function ensureItemShape(it: any): MovieItem {
-  return {
-    tmdbId: it?.tmdbId,
-    id: it?.id,
-    title: String(it?.title ?? "Untitled"),
-    poster: String(it?.poster ?? "/placeholder.svg"),
-    ageRating: String(it?.ageRating ?? "NR"),
-    runtime: Number(it?.runtime ?? 0),
-    genres: Array.isArray(it?.genres) ? it.genres : [],
-    bestDeal: it?.bestDeal ?? undefined,
-  };
-}
+type ListKey = "trending" | "new" | "leaving";
 
 export default function FilmShelf({
   title,
-  subtitle,
   list,
-  browseHref,
-  isAuthed,
+  browseHref = "/films",
 }: {
   title: string;
-  subtitle?: string;
-  list: "trending" | "new";
-  browseHref: string;
-  isAuthed: boolean;
+  list: ListKey;
+  browseHref?: string;
 }) {
-  const [data, setData] = useState<FilmsResponse | null>(null);
+  const [items, setItems] = useState<MovieItem[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const browseTarget = useMemo(() => `${browseHref}?list=${list}`, [browseHref, list]);
-  const href = useMemo(
-    () => (isAuthed ? browseTarget : `/login?from=${encodeURIComponent(browseTarget)}`),
-    [isAuthed, browseTarget]
-  );
 
   useEffect(() => {
     let alive = true;
-    const ctrl = new AbortController();
 
-    async function run() {
+    (async () => {
       setLoading(true);
-
       try {
-        const r = await fetch(`/api/films?list=${list}&mood=all&page=1`, {
-          signal: ctrl.signal,
-          cache: "no-store",
-        });
+        const res = await fetch(`/api/films?list=${list}&limit=6`);
+        const json = await res.json();
 
-        const j = (await r.json()) as FilmsResponse;
+        const mapped: MovieItem[] = (json.items || [])
+          .map((m: any) => ({
+            tmdbId: Number(m.tmdbId ?? m.tmdb_id ?? m.id),
+            title: String(m.title ?? "Untitled"),
+            poster: String(m.poster ?? "/placeholder.svg"),
+          }))
+          .filter((x: MovieItem) => Number.isFinite(x.tmdbId));
 
-        if (!alive) return;
-
-        setData({
-          ...j,
-          items: Array.isArray(j.items) ? j.items.map(ensureItemShape) : [],
-        });
+        if (alive) setItems(mapped);
       } catch {
-        if (!alive) return;
-        setData({
-          items: [],
-          page: 1,
-          totalPages: 1,
-          error: "Failed to load films.",
-        });
+        if (alive) setItems([]);
       } finally {
         if (alive) setLoading(false);
       }
-    }
-
-    void run();
+    })();
 
     return () => {
       alive = false;
-      ctrl.abort();
     };
   }, [list]);
 
-  const items = (data?.items ?? []).slice(0, 6);
-
   return (
-    <section className="mt-10 sm:mt-12">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-xl sm:text-2xl font-bold">{title}</h2>
-          {subtitle ? (
-            <p className="mt-1 text-sm text-[--color-muted]">{subtitle}</p>
-          ) : null}
-        </div>
-
-        <Link className="btn btn-ghost self-start sm:self-auto" href={href}>
-          Browse all
+    <section className="mt-10">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-extrabold tracking-tight md:text-xl">{title}</h2>
+        <Link
+          href={browseHref}
+          className="no-underline text-sm text-[--color-muted] hover:opacity-80"
+        >
+          Browse →
         </Link>
       </div>
 
-      {data?.error ? (
-        <div className="mt-4 rounded-[--radius-xl] border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
-          {data.error}
+      {loading ? (
+        <p className="mt-4 text-[--color-muted]">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="mt-4 text-[--color-muted]">No films available.</p>
+      ) : (
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          {items.map((it) => (
+            <MovieCard key={String(it.tmdbId)} item={it} />
+          ))}
         </div>
-      ) : null}
-
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 sm:gap-5">
-        {loading
-          ? Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="overflow-hidden rounded-[--radius-xl] border border-white/10 bg-white/5 animate-pulse"
-              >
-                <div className="aspect-[2/3] bg-black/30" />
-                <div className="space-y-2 p-3">
-                  <div className="h-4 rounded bg-white/10" />
-                  <div className="h-3 w-2/3 rounded bg-white/10" />
-                </div>
-              </div>
-            ))
-          : items.map((it) => (
-              <MovieCard key={it.tmdbId ?? it.title} item={it} variant="discover" />
-            ))}
-      </div>
+      )}
     </section>
   );
 }
