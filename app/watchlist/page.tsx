@@ -1,94 +1,185 @@
-// app/watchlist/page.tsx
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import MovieCard, { type MovieItem } from "@/components/shared/MovieCard";
+import { useAuth } from "@/hooks/useAuth";
+import { createSupabaseBrowser } from "@/lib/supabase/client";
 
-type Rec = {
-  id: number;
-  tmdbId: number;
-  title: string;
-  ageRating: string | null;
-  runtime: number | null;
-  genres: string[];
-  match: number;
-  bestDeal: { provider: string; type: string; region: string };
-  poster?: string;
-};
+const ITEMS_PER_PAGE = 40;
 
-const WATCHLIST_KEY = 'feelix_watchlist_v1';
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
 
 export default function WatchlistPage() {
-  const [items, setItems] = useState<Rec[]>([]);
+  const { user, loading } = useAuth();
+  const supabase = useMemo(() => createSupabaseBrowser(), []);
+
+  const [items, setItems] = useState<MovieItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    try {
-      const wl = localStorage.getItem(WATCHLIST_KEY);
-      setItems(wl ? JSON.parse(wl) : []);
-    } catch {
-      setItems([]);
-    }
-  }, []);
+    let alive = true;
 
-  const removeItem = (tmdbId: number) => {
-    const next = items.filter((x) => x.tmdbId !== tmdbId);
-    setItems(next);
-    localStorage.setItem(WATCHLIST_KEY, JSON.stringify(next));
-  };
+    async function run() {
+      if (loading) return;
+
+      if (!user) {
+        if (!alive) return;
+        setItems([]);
+        return;
+      }
+
+      setError(null);
+
+      const { data, error: qErr } = await supabase
+        .from("watchlist_items")
+        .select("external_id,title,poster,payload,created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (!alive) return;
+
+      if (qErr) {
+        setError(qErr.message);
+        setItems([]);
+        return;
+      }
+
+      const mapped: MovieItem[] = (data ?? [])
+        .map((row: any) => {
+          const tmdbId = Number(row?.payload?.tmdbId ?? row?.external_id);
+          if (!Number.isFinite(tmdbId)) return null;
+
+          return {
+            tmdbId,
+            title: String(row?.title ?? "Untitled"),
+            poster: String(row?.poster ?? "/placeholder.svg"),
+          };
+        })
+        .filter(Boolean) as MovieItem[];
+
+      // Keeps the grid stable if duplicate rows exist in storage.
+      const seen = new Set<number>();
+      const unique: MovieItem[] = [];
+
+      for (const item of mapped) {
+        if (seen.has(item.tmdbId)) continue;
+        seen.add(item.tmdbId);
+        unique.push(item);
+      }
+
+      setItems(unique);
+    }
+
+    run();
+
+    return () => {
+      alive = false;
+    };
+  }, [loading, user?.id, supabase]);
+
+  // Resets pagination when the dataset changes.
+  useEffect(() => {
+    setPage(1);
+  }, [items?.length]);
+
+  const totalItems = items?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
+  const safePage = clamp(page, 1, totalPages);
+
+  const pagedItems = useMemo(() => {
+    if (!items) return [];
+    const start = (safePage - 1) * ITEMS_PER_PAGE;
+    return items.slice(start, start + ITEMS_PER_PAGE);
+  }, [items, safePage]);
+
+  function goToPage(nextPage: number) {
+    setPage(clamp(nextPage, 1, totalPages));
+    window.scrollTo({ top: 0 });
+  }
+
+  if (loading || items === null) {
+    return <p className="container py-10">Loading…</p>;
+  }
+
+  if (!user) {
+    return (
+      <section className="container py-8 sm:py-10">
+        <div className="card p-6 text-center sm:p-7">
+          <h1 className="text-2xl font-extrabold">Sign in to view Watchlist</h1>
+          <p className="mt-2 text-[--color-muted]">Your intent list lives here.</p>
+
+          <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+            <Link className="btn btn-primary" href="/login?from=/watchlist">
+              Sign in
+            </Link>
+            <Link className="btn btn-ghost" href="/signup">
+              Create account
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section className="bg-[#eaeaea] text-neutral-900 min-h-[80vh]">
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <div className="flex items-baseline justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">Watchlist</h1>
-            <p className="text-neutral-600 mt-1">Saved picks across sessions (local device).</p>
-          </div>
-          <Link href="/results" className="rounded-xl px-3 py-2 bg-white border border-black/10 font-semibold hover:bg-white/80">
-            Back to results
-          </Link>
+    <section className="container py-8 sm:py-10">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold">Watchlist</h1>
         </div>
 
-        {items.length === 0 ? (
-          <div className="mt-10 text-neutral-600">No saved items yet.</div>
-        ) : (
-          <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((m) => (
-              <li key={m.tmdbId} className="rounded-2xl border border-black/10 bg-white shadow-sm overflow-hidden">
-                <div className="relative aspect-[2/3] bg-neutral-200">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {m.poster ? (
-                    <img src={m.poster} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full grid place-items-center text-neutral-500">Poster</div>
-                  )}
-                  <div className="absolute left-3 top-3 rounded-full bg-black text-white text-xs font-semibold px-2 py-1">
-                    {(m.match * 100).toFixed(0)}% Match
-                  </div>
-                </div>
-                <div className="p-5">
-                  <div className="font-semibold text-lg">{m.title}</div>
-                  <div className="text-sm text-neutral-600 mt-0.5">
-                    {(m.ageRating ?? 'NR')} • {(m.runtime ?? '—')} min
-                  </div>
-                  <div className="text-sm mt-2">{(m.genres ?? []).join(', ')}</div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-black text-white px-2 py-1 text-xs">
-                      {m.bestDeal.provider} · {m.bestDeal.type}
-                    </span>
-                    <button
-                      onClick={() => removeItem(m.tmdbId)}
-                      className="ml-auto rounded-full border border-black/10 bg-white px-3 py-1.5 text-sm hover:bg-white/80"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <Link className="text-sm text-[--color-muted] hover:underline" href="/films">
+          Browse films →
+        </Link>
       </div>
+
+      {error ? (
+        <div className="mt-6 rounded-[--radius-xl] border border-white/10 bg-white/5 p-4">
+          ⚠️ {error}
+        </div>
+      ) : null}
+
+      {totalItems === 0 ? (
+        <div className="mt-6 card p-6 text-center sm:p-7">
+          <p className="text-[--color-muted]">No films in your watchlist yet.</p>
+        </div>
+      ) : (
+        <>
+          <div className="mt-6 grid grid-cols-4 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+            {pagedItems.map((item) => (
+              <MovieCard key={`wl-${item.tmdbId}`} item={item} />
+            ))}
+          </div>
+
+          <div className="mt-8 flex items-center justify-center gap-2 sm:mt-10">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={safePage <= 1}
+              onClick={() => goToPage(safePage - 1)}
+            >
+              ← Prev
+            </button>
+
+            <button type="button" className="btn btn-ghost" disabled>
+              Page {safePage} of {totalPages}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={safePage >= totalPages}
+              onClick={() => goToPage(safePage + 1)}
+            >
+              Next →
+            </button>
+          </div>
+        </>
+      )}
     </section>
   );
 }

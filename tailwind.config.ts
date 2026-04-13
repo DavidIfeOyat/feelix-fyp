@@ -2,27 +2,35 @@ import type { Config } from "tailwindcss";
 
 export default {
   content: [
-    "./src/app/**/*.{ts,tsx}",
-    "./src/components/**/*.{ts,tsx}",
-    "./src/lib/**/*.{ts,tsx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
+    "./hooks/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: "#faf5ff",
-          100: "#f3e8ff",
-          200: "#e9d5ff",
-          300: "#d8b4fe",
-          400: "#c084fc",
-          500: "#a855f7",
-          600: "#9333ea",
-          700: "#7e22ce",
-          800: "#6b21a8",
-          900: "#581c87"
-        }
-      }
-    }
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        muted: "var(--muted)",
+        surface: "var(--surface)",
+        "surface-strong": "var(--surface-strong)",
+        border: "var(--border)",
+        brand: "var(--brand)",
+      },
+      borderRadius: {
+        sm: "0px",
+        DEFAULT: "0px",
+        md: "0px",
+        lg: "0px",
+        xl: "0px",
+        "2xl": "0px",
+      },
+      boxShadow: {
+        soft: "var(--shadow-soft)",
+        strong: "var(--shadow-strong)",
+      },
+    },
   },
-  plugins: []
+  plugins: [],
 } satisfies Config;
