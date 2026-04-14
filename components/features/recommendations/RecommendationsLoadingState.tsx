@@ -72,18 +72,6 @@ export function RecommendationsLoadingState() {
 
   return (
     <section className="mt-8 border-2 border-black bg-[var(--surface)]">
-      <div className="grid border-b-2 border-black sm:grid-cols-3">
-        <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
-          Recommendation engine
-        </div>
-        <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
-          Personal taste signals
-        </div>
-        <div className="px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
-          Final ranking
-        </div>
-      </div>
-
       <div className="grid gap-6 p-4 sm:p-6 md:grid-cols-[1.05fr_0.95fr] md:p-8">
         <div>
           <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">

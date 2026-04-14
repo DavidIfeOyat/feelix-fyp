@@ -1,115 +1,103 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
-const DEV_BYPASS_ENABLED =
-  process.env.NODE_ENV !== "production" &&
-  process.env.NEXT_PUBLIC_DEV_BYPASS_EMAIL_CONFIRM === "1";
+type AuthMsg = { type: "error" | "success"; text: string } | null;
 
-function friendlySignupError(message: string) {
+function friendlyAuthError(message: string) {
   const m = message.toLowerCase();
 
-  if (m.includes("user already registered")) {
-    return "An account with this email already exists.";
+  if (m.includes("invalid login credentials")) {
+    return "Incorrect email or password.";
   }
 
-  if (m.includes("password")) {
-    return "Use a stronger password with at least 8 characters.";
+  if (m.includes("email not confirmed")) {
+    return "Please confirm your email before signing in.";
   }
 
-  return "Account creation failed. Please try again.";
+  if (m.includes("too many requests")) {
+    return "Too many attempts. Try again in a minute.";
+  }
+
+  return "Sign in failed. Please try again.";
 }
 
-function isValidUsername(value: string) {
-  return /^[a-zA-Z0-9_]{3,20}$/.test(value);
+function resolveRedirect(rawFrom: string | null) {
+  const fallback = "/dashboard";
+
+  if (!rawFrom) return fallback;
+  if (!rawFrom.startsWith("/") || rawFrom.startsWith("//")) return fallback;
+  if (rawFrom.startsWith("/login") || rawFrom.startsWith("/signup")) return fallback;
+
+  return rawFrom;
 }
 
-export default function SignUpPage() {
-  const router = useRouter();
+export default function LoginPageClient() {
+  const searchParams = useSearchParams();
+  const { user, loading } = useAuth();
   const supabase = useMemo(() => createSupabaseBrowser(), []);
+
+  const from = useMemo(() => resolveRedirect(searchParams.get("from")), [searchParams]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<AuthMsg>(() => {
+    if (searchParams.get("created") === "1") {
+      return { type: "success", text: "Account created. You can sign in now." };
+    }
+    return null;
+  });
 
-  async function onSubmit(e: React.FormEvent) {
+  useEffect(() => {
+    if (!loading && user) {
+      window.location.replace(from);
+    }
+  }, [loading, user, from]);
+
+  async function onLogin(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null);
-    setLoading(true);
+    setBusy(true);
+    setMsg(null);
 
     const cleanEmail = email.trim().toLowerCase();
-    const cleanUsername = username.trim();
 
-    if (!isValidUsername(cleanUsername)) {
-      setErr("Username must be 3–20 characters and use only letters, numbers, or underscores.");
-      setLoading(false);
-      return;
-    }
-
-    if (password.length < 8) {
-      setErr("Password must be at least 8 characters long.");
-      setLoading(false);
+    if (!cleanEmail || !password) {
+      setMsg({ type: "error", text: "Enter both your email and password." });
+      setBusy(false);
       return;
     }
 
     try {
-      if (DEV_BYPASS_ENABLED) {
-        const res = await fetch("/api/dev/create-user", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            email: cleanEmail,
-            password,
-            username: cleanUsername,
-          }),
-        });
-
-        const json = await res.json();
-
-        if (!res.ok || json?.ok === false) {
-          throw new Error(json?.error || "Signup failed");
-        }
-
-        router.push("/login?created=1");
-        return;
-      }
-
-      const emailRedirectTo =
-        typeof window !== "undefined"
-          ? `${window.location.origin}/login?created=1`
-          : undefined;
-
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password,
-        options: {
-          emailRedirectTo,
-          data: {
-            username: cleanUsername,
-          },
-        },
       });
 
       if (error) throw error;
 
-      if (data.session) {
-        router.push("/onboarding/favourites");
-        return;
-      }
-
-      router.push("/login?created=1");
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Signup failed.";
-      setErr(friendlySignupError(message));
+      window.location.assign(from);
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : "Login failed.";
+      setMsg({ type: "error", text: friendlyAuthError(raw) });
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <section className="container py-10 sm:py-14">
+        <div className="mx-auto max-w-md border-2 border-black bg-[var(--surface)]">
+          <div className="px-5 py-6 text-sm text-[var(--muted)]">Loading...</div>
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -120,28 +108,12 @@ export default function SignUpPage() {
             Feelix
           </p>
           <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)]">
-            Create Account
+            Sign In
           </h1>
         </div>
 
         <div className="p-5 sm:p-6">
-          <form onSubmit={onSubmit} className="grid gap-5">
-            <label className="grid gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
-                Username
-              </span>
-              <input
-                type="text"
-                autoComplete="username"
-                className="w-full"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="your_username"
-                disabled={loading}
-                required
-              />
-            </label>
-
+          <form onSubmit={onLogin} className="grid gap-5">
             <label className="grid gap-2">
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Email
@@ -154,8 +126,8 @@ export default function SignUpPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                disabled={loading}
                 required
+                disabled={busy}
               />
             </label>
 
@@ -167,13 +139,13 @@ export default function SignUpPage() {
               <div className="grid grid-cols-[1fr_auto] gap-2">
                 <input
                   type={showPw ? "text" : "password"}
-                  autoComplete="new-password"
+                  autoComplete="current-password"
                   className="w-full"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                  disabled={loading}
+                  placeholder="Enter password"
                   required
+                  disabled={busy}
                 />
 
                 <button
@@ -181,40 +153,36 @@ export default function SignUpPage() {
                   className="border-2 border-black px-4 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--foreground)] transition hover:bg-black hover:text-[var(--background)] disabled:opacity-50"
                   onClick={() => setShowPw((v) => !v)}
                   aria-label={showPw ? "Hide password" : "Show password"}
-                  disabled={loading}
+                  disabled={busy}
                 >
                   {showPw ? "Hide" : "Show"}
                 </button>
               </div>
             </label>
 
-            <p className="text-[11px] leading-6 text-[var(--muted)]">
-              Usernames can use letters, numbers, and underscores. Passwords must be at least 8 characters.
-            </p>
-
-            {err ? (
+            {msg ? (
               <div className="border border-black bg-[var(--surface-strong)] px-4 py-3 text-sm text-[var(--foreground)]">
-                {err}
+                {msg.text}
               </div>
             ) : null}
 
             <div className="grid gap-3 pt-2">
-              <button className="btn btn-primary w-full" disabled={loading} type="submit">
-                {loading ? "Creating account..." : "Create account"}
+              <button className="btn btn-primary w-full" disabled={busy} type="submit">
+                {busy ? "Signing in..." : "Sign in"}
               </button>
 
-              <Link href="/login" className="btn btn-ghost text-center">
-                Sign in instead
+              <Link href="/signup" className="btn btn-ghost text-center">
+                Create account
               </Link>
             </div>
 
             <div className="border-t border-black pt-4 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-              Already have an account?{" "}
+              Don’t have an account?{" "}
               <Link
                 className="text-[var(--foreground)] underline-offset-4 hover:underline"
-                href="/login"
+                href="/signup"
               >
-                Sign in
+                Create one
               </Link>
             </div>
 

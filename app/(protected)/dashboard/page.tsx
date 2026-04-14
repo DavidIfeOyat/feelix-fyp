@@ -113,7 +113,7 @@ export default function DashboardPage() {
         <section className="grid gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
           <div className="border-2 border-black bg-[var(--surface)] px-4 py-4">
             <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] sm:text-[10px]">
-              Route
+              VISIT
             </p>
             <p className="mt-2 text-xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)]">
               Watchlist
@@ -122,7 +122,7 @@ export default function DashboardPage() {
 
           <div className="border-2 border-black bg-[var(--surface)] px-4 py-4">
             <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] sm:text-[10px]">
-              Route
+              VISIT
             </p>
             <p className="mt-2 text-xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)]">
               Profile
@@ -131,7 +131,7 @@ export default function DashboardPage() {
 
           <div className="border-2 border-black bg-[var(--surface)] px-4 py-4">
             <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] sm:text-[10px]">
-              Route
+              VISIT
             </p>
             <p className="mt-2 text-xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)]">
               Favourites
@@ -140,7 +140,7 @@ export default function DashboardPage() {
 
           <div className="border-2 border-black bg-[var(--surface)] px-4 py-4">
             <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] sm:text-[10px]">
-              Route
+              VISIT
             </p>
             <p className="mt-2 text-xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)]">
               Recommendations

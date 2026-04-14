@@ -126,7 +126,6 @@ function ChoiceGroup<T extends string>({
 }
 
 export function RecommendationsRefineStep({
-  summary,
   intentions,
   intentionOptions,
   toggleIntention,
@@ -167,10 +166,6 @@ export function RecommendationsRefineStep({
 }: RecommendationsRefineStepProps) {
   return (
     <div className="mt-8 grid gap-6">
-      <Panel eyebrow="Current vibe" title="Your mood summary">
-        <p className="text-sm leading-7 text-[var(--foreground)]">{summary}</p>
-      </Panel>
-
       <Panel eyebrow="Intent" title="What do you want tonight?">
         <div className="flex items-start justify-between gap-4">
           <p className="max-w-2xl text-sm leading-7 text-[var(--muted)]">
@@ -350,18 +345,6 @@ export function RecommendationsRefineStep({
                   }
                 />
               </div>
-
-              <label className="mt-5 grid grid-cols-[auto_1fr] gap-3 border-2 border-black bg-[var(--surface-strong)] p-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={surpriseMe}
-                  onChange={(e) => setSurpriseMeValue(e.target.checked)}
-                  className="mt-1 h-4 w-4 accent-black"
-                />
-                <span className="leading-6 text-[var(--foreground)]">
-                  Surprise me with a looser, more exploratory search.
-                </span>
-              </label>
 
               <p className="mt-3 text-xs leading-6 text-[var(--muted)]">
                 You need at least one feeling or one intention before getting recommendations.

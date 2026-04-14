@@ -5,6 +5,12 @@ import { createServerClient } from "@supabase/ssr";
 const PROTECTED_PREFIXES = ["/films", "/watchlist", "/group", "/profile", "/dashboard"];
 
 export async function proxy(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+
+  if (pathname.startsWith("/api")) {
+    return NextResponse.next();
+  }
+
   let res = NextResponse.next();
 
   const supabase = createServerClient(
@@ -26,8 +32,6 @@ export async function proxy(req: NextRequest) {
 
   const { data } = await supabase.auth.getUser();
   const user = data.user;
-
-  const pathname = req.nextUrl.pathname;
 
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");

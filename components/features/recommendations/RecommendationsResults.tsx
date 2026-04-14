@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import type { RecoItem } from "@/hooks/useRecommendationBuilder";
 
 export type RecommendationsResultsProps = {
@@ -23,7 +24,6 @@ function InfoPill({ children }: { children: ReactNode }) {
 }
 
 export function RecommendationsResults({
-  summary,
   items,
   busy,
   onChangeMood,
@@ -31,26 +31,39 @@ export function RecommendationsResults({
   addToWatchlist,
   openSchedule,
 }: RecommendationsResultsProps) {
+  const [addedIds, setAddedIds] = useState<number[]>([]);
+  const [savingIds, setSavingIds] = useState<number[]>([]);
+
   const heroItem = items[0] ?? null;
   const supportingItems = items.slice(1, 4);
 
+  async function handleAddToWatchlist(item: RecoItem) {
+    if (addedIds.includes(item.tmdbId) || savingIds.includes(item.tmdbId)) return;
+
+    setSavingIds((prev) => [...prev, item.tmdbId]);
+
+    try {
+      await addToWatchlist(item);
+      setAddedIds((prev) => (prev.includes(item.tmdbId) ? prev : [...prev, item.tmdbId]));
+    } catch (error) {
+      console.error("Failed to add to watchlist:", error);
+    } finally {
+      setSavingIds((prev) => prev.filter((id) => id !== item.tmdbId));
+    }
+  }
+
+  function getWatchlistLabel(item: RecoItem) {
+    if (addedIds.includes(item.tmdbId)) return "Added";
+    if (savingIds.includes(item.tmdbId)) return "Adding...";
+    return "Add to Watchlist";
+  }
+
+  function isWatchlistDisabled(item: RecoItem) {
+    return addedIds.includes(item.tmdbId) || savingIds.includes(item.tmdbId);
+  }
+
   return (
     <div className="mt-8 grid gap-6">
-      <section className="border-2 border-black bg-[var(--surface)]">
-        <div className="border-b-2 border-black px-4 py-3 sm:px-5">
-          <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
-            Current vibe
-          </p>
-          <h2 className="mt-2 text-xl font-extrabold uppercase leading-[0.95] tracking-[-0.05em] text-[var(--foreground)] sm:text-2xl">
-            Your summary
-          </h2>
-        </div>
-
-        <div className="p-4 sm:p-5">
-          <p className="text-sm leading-7 text-[var(--foreground)]">{summary}</p>
-        </div>
-      </section>
-
       {items.length === 0 ? (
         <section className="border-2 border-black bg-[var(--surface)]">
           <div className="p-5 text-center sm:p-6">
@@ -159,10 +172,11 @@ export function RecommendationsResults({
 
                   <button
                     className="btn btn-primary"
-                    onClick={() => addToWatchlist(heroItem)}
+                    onClick={() => handleAddToWatchlist(heroItem)}
+                    disabled={isWatchlistDisabled(heroItem)}
                     type="button"
                   >
-                    Add to Watchlist
+                    {getWatchlistLabel(heroItem)}
                   </button>
 
                   <button
@@ -223,10 +237,11 @@ export function RecommendationsResults({
 
                         <button
                           className="btn btn-primary"
-                          onClick={() => addToWatchlist(it)}
+                          onClick={() => handleAddToWatchlist(it)}
+                          disabled={isWatchlistDisabled(it)}
                           type="button"
                         >
-                          Add to Watchlist
+                          {getWatchlistLabel(it)}
                         </button>
 
                         <button

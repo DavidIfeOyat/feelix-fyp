@@ -25,7 +25,6 @@ type StructuredMoodInput = {
   darkness: Darkness;
   brainpower: Brainpower;
   watchContext: WatchContext;
-  surpriseMe: boolean;
 };
 
 type RecoItem = {
@@ -37,7 +36,10 @@ type RecoItem = {
   bestDeal: { provider: string; type: DealType; region: Region } | null;
 };
 
-type ProviderRow = { provider_name?: unknown };
+type ProviderRow = {
+  provider_name?: unknown;
+  provider_id?: unknown;
+};
 
 type WatchProvidersResponse = {
   results?: Record<
@@ -90,6 +92,10 @@ type FilmFeedbackRow = {
   external_id?: unknown;
   tmdb_id?: unknown;
   liked?: unknown;
+};
+
+type ProfileRow = {
+  top_four_ids?: unknown;
 };
 
 type UserTasteProfile = {
@@ -162,7 +168,6 @@ const INTENTION_GENRES: Record<string, number[]> = {
   "give me romance": [GENRES.ROMANCE, GENRES.COMEDY, GENRES.DRAMA],
   "give me adrenaline": [GENRES.ACTION, GENRES.THRILLER, GENRES.CRIME, GENRES.ADVENTURE],
   "move me emotionally": [GENRES.DRAMA, GENRES.ROMANCE, GENRES.COMEDY],
-  "surprise me": [GENRES.MYSTERY, GENRES.SCI_FI, GENRES.THRILLER],
   "mind-bending": [GENRES.SCI_FI, GENRES.MYSTERY, GENRES.THRILLER],
   heartwarming: [GENRES.FAMILY, GENRES.COMEDY, GENRES.DRAMA],
   "dark and gripping": [GENRES.THRILLER, GENRES.CRIME, GENRES.HORROR, GENRES.MYSTERY],
@@ -177,7 +182,6 @@ const INTENTION_HINTS: Record<string, string[]> = {
   "give me romance": ["love story", "chemistry", "romantic"],
   "give me adrenaline": ["chase", "high stakes", "action"],
   "move me emotionally": ["moving", "bittersweet", "emotional"],
-  "surprise me": ["unexpected", "fresh", "unpredictable"],
   "mind-bending": ["time loop", "reality", "mind-bending"],
   heartwarming: ["warm", "uplifting", "comfort"],
   "dark and gripping": ["crime noir", "psychological", "dark"],
@@ -342,30 +346,80 @@ function keywordHintListFromMap(keys: string[], source: Record<string, string[]>
   return hints;
 }
 
-function bestDeal(wp: WatchProvidersResponse, region: Region): RecoItem["bestDeal"] {
+type ProviderEntry = {
+  provider: string;
+  providerId: number;
+  type: DealType;
+};
+
+function providerEntries(wp: WatchProvidersResponse, region: Region): ProviderEntry[] {
   const r = wp?.results?.[region];
-  if (!r) return null;
+  if (!r) return [];
 
-  const pick = (arr?: ProviderRow[]) => (Array.isArray(arr) && arr.length ? arr[0] : null);
+  const read = (rows: ProviderRow[] | undefined, type: DealType): ProviderEntry[] => {
+    if (!Array.isArray(rows)) return [];
 
-  const a = pick(r.flatrate);
-  if (a?.provider_name) return { provider: String(a.provider_name), type: "stream", region };
+    return rows
+      .map((row) => {
+        const provider = String(row?.provider_name ?? "").trim();
+        const providerId = Number(row?.provider_id);
+        if (!provider || !Number.isFinite(providerId)) return null;
 
-  const b = pick(r.rent);
-  if (b?.provider_name) return { provider: String(b.provider_name), type: "rent", region };
+        return {
+          provider,
+          providerId,
+          type,
+        };
+      })
+      .filter((entry): entry is ProviderEntry => Boolean(entry));
+  };
 
-  const c = pick(r.buy);
-  if (c?.provider_name) return { provider: String(c.provider_name), type: "buy", region };
-
-  return null;
+  return [
+    ...read(r.flatrate, "stream"),
+    ...read(r.rent, "rent"),
+    ...read(r.buy, "buy"),
+  ];
 }
 
-function mulberry32(seed: number) {
-  return () => {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+function hasSelectedStreamProvider(
+  wp: WatchProvidersResponse,
+  region: Region,
+  providerIds: number[]
+) {
+  if (!providerIds.length) return true;
+
+  const entries = providerEntries(wp, region);
+  return entries.some(
+    (entry) => entry.type === "stream" && providerIds.includes(entry.providerId)
+  );
+}
+
+function bestDeal(
+  wp: WatchProvidersResponse,
+  region: Region,
+  preferredProviderIds: number[] = []
+): RecoItem["bestDeal"] {
+  const entries = providerEntries(wp, region);
+  if (!entries.length) return null;
+
+  const preferred =
+    preferredProviderIds.length > 0
+      ? entries.find(
+          (entry) =>
+            entry.type === "stream" && preferredProviderIds.includes(entry.providerId)
+        ) ??
+        entries.find((entry) => preferredProviderIds.includes(entry.providerId))
+      : null;
+
+  const chosen =
+    preferred ??
+    entries.find((entry) => entry.type === "stream") ??
+    entries[0];
+
+  return {
+    provider: chosen.provider,
+    type: chosen.type,
+    region,
   };
 }
 
@@ -401,7 +455,9 @@ function extractTmdbId(row: {
   return Number.isFinite(id) ? id : null;
 }
 
-function extractGenreIdsFromPayload(payload: FavoriteRow["payload"]) {
+function extractGenreIdsFromPayload(
+  payload: FavoriteRow["payload"] | WatchlistRow["payload"]
+) {
   return uniqInts(payload?.genreIds ?? payload?.genre_ids ?? [], 20);
 }
 
@@ -457,7 +513,7 @@ async function buildUserTasteProfile(
   supabase: SupabaseClient,
   userId: string
 ): Promise<UserTasteProfile> {
-  const [favoritesRes, feedbackRes, watchlistRes] = await Promise.all([
+  const [favoritesRes, feedbackRes, watchlistRes, profileRes] = await Promise.all([
     supabase
       .from("favorites_items")
       .select("external_id, tmdb_id, payload")
@@ -473,11 +529,19 @@ async function buildUserTasteProfile(
       .select("external_id, payload")
       .eq("user_id", userId)
       .limit(150),
+    supabase
+      .from("profiles")
+      .select("top_four_ids")
+      .eq("user_id", userId)
+      .maybeSingle(),
   ]);
 
   const favoriteRows = (favoritesRes.data ?? []) as FavoriteRow[];
   const feedbackRows = (feedbackRes.data ?? []) as FilmFeedbackRow[];
   const watchlistRows = (watchlistRes.data ?? []) as WatchlistRow[];
+  const profileRow = (profileRes.data ?? null) as ProfileRow | null;
+
+  const topFourIds = uniqInts(profileRow?.top_four_ids ?? [], 4);
 
   const watchedTmdbIds = new Set<number>();
   const savedTmdbIds = new Set<number>();
@@ -491,6 +555,7 @@ async function buildUserTasteProfile(
   for (const row of feedbackRows) {
     const tmdbId = extractTmdbId(row);
     const key = feedbackKey(tmdbId, row.external_id);
+
     if (key !== null) feedbackStateByKey.set(key, Boolean(row.liked));
     if (tmdbId !== null) feedbackStateByKey.set(`tmdb:${tmdbId}`, Boolean(row.liked));
 
@@ -498,13 +563,26 @@ async function buildUserTasteProfile(
     if (external) feedbackStateByKey.set(`ext:${external}`, Boolean(row.liked));
   }
 
+  const queuedGenreWeights = new Map<number, { liked: number; disliked: number }>();
+
   for (const row of watchlistRows) {
     const tmdbId = extractTmdbId(row);
     if (tmdbId === null) continue;
+
     savedTmdbIds.add(tmdbId);
+
+    const genreIds = extractGenreIdsFromPayload(row.payload);
+    if (genreIds.length) {
+      addWeightedGenres(likedGenres, genreIds, 1.4);
+    } else {
+      queueGenreWeight(queuedGenreWeights, tmdbId, "liked", 1.4);
+    }
   }
 
-  const queuedGenreWeights = new Map<number, { liked: number; disliked: number }>();
+  for (const tmdbId of topFourIds) {
+    likedTmdbIds.add(tmdbId);
+    queueGenreWeight(queuedGenreWeights, tmdbId, "liked", 4.5);
+  }
 
   for (const row of favoriteRows) {
     const tmdbId = extractTmdbId(row);
@@ -532,9 +610,9 @@ async function buildUserTasteProfile(
 
     const genreIds = extractGenreIdsFromPayload(row.payload);
     if (genreIds.length) {
-      addWeightedGenres(likedGenres, genreIds, 2.5);
+      addWeightedGenres(likedGenres, genreIds, 2.75);
     } else {
-      queueGenreWeight(queuedGenreWeights, tmdbId, "liked", 2.5);
+      queueGenreWeight(queuedGenreWeights, tmdbId, "liked", 2.75);
     }
   }
 
@@ -553,7 +631,7 @@ async function buildUserTasteProfile(
     } else {
       dislikedTmdbIds.add(tmdbId);
       likedTmdbIds.delete(tmdbId);
-      queueGenreWeight(queuedGenreWeights, tmdbId, "disliked", 3.75);
+      queueGenreWeight(queuedGenreWeights, tmdbId, "disliked", 3.9);
     }
   }
 
@@ -580,13 +658,29 @@ async function buildUserTasteProfile(
   };
 }
 
-function scoreMatchAdvanced(movie: TMDbMovie, targetGenres: Set<number>, taste: UserTasteProfile) {
+function scoreMatchAdvanced(
+  movie: TMDbMovie,
+  targetGenres: Map<number, number>,
+  taste: UserTasteProfile
+) {
   const movieGenres: number[] = Array.isArray(movie?.genre_ids)
     ? movie.genre_ids.map((x) => Number(x)).filter(Number.isFinite)
     : [];
 
+  let targetWeightTotal = 0;
+  for (const weight of targetGenres.values()) {
+    targetWeightTotal += weight;
+  }
+
+  let matchedWeight = 0;
+  for (const genreId of movieGenres) {
+    matchedWeight += targetGenres.get(genreId) ?? 0;
+  }
+
   const overlap = movieGenres.filter((g) => targetGenres.has(g)).length;
-  const intentScore = targetGenres.size ? overlap / targetGenres.size : 0;
+  const weightedIntentScore = targetWeightTotal ? matchedWeight / targetWeightTotal : 0;
+  const precisionScore = movieGenres.length ? overlap / movieGenres.length : 0;
+  const intentScore = 0.78 * weightedIntentScore + 0.22 * precisionScore;
 
   let likedAffinity = 0;
   let dislikedAffinity = 0;
@@ -599,15 +693,17 @@ function scoreMatchAdvanced(movie: TMDbMovie, targetGenres: Set<number>, taste: 
   const voteScore = clamp(Number(movie?.vote_average ?? 0) / 10, 0, 1);
   const popScore = clamp(Number(movie?.popularity ?? 0) / 250, 0, 1);
 
-  const positiveTasteBoost = clamp(likedAffinity * 0.04, 0, 0.24);
-  const negativeTastePenalty = clamp(dislikedAffinity * 0.05, 0, 0.38);
+  const positiveTasteBoost = clamp(likedAffinity * 0.035, 0, 0.3);
+  const negativeTastePenalty = clamp(dislikedAffinity * 0.06, 0, 0.42);
+  const fillerPenalty = popScore > 0.72 && intentScore < 0.4 ? 0.08 : 0;
 
   const score =
-    0.55 * intentScore +
-    0.15 * voteScore +
-    0.1 * popScore +
+    0.68 * intentScore +
+    0.17 * voteScore +
+    0.03 * popScore +
     positiveTasteBoost -
-    negativeTastePenalty;
+    negativeTastePenalty -
+    fillerPenalty;
 
   return clamp(Number(score.toFixed(2)), 0, 1);
 }
@@ -632,7 +728,6 @@ function getStructuredInput(body: Record<string, unknown>): StructuredMoodInput 
     darkness: parseEnum(body.darkness, allowedDarkness, "mixed"),
     brainpower: parseEnum(body.brainpower, allowedBrainpower, "engaging"),
     watchContext: parseEnum(body.watchContext, allowedContext, "solo"),
-    surpriseMe: Boolean(body.surpriseMe),
   };
 
   const presetKey = String(body.presetKey ?? body.moodKey ?? "").trim();
@@ -657,11 +752,11 @@ async function buildMoodSignals(input: StructuredMoodInput) {
   const keywordHints: string[] = [];
 
   for (const feeling of input.feelings) {
-    addWeightedGenres(genreScores, FEELING_GENRES[feeling] ?? [], 1.7);
+    addWeightedGenres(genreScores, FEELING_GENRES[feeling] ?? [], 1.8);
   }
 
   for (const intention of input.intentions) {
-    addWeightedGenres(genreScores, INTENTION_GENRES[intention] ?? [], 2.2);
+    addWeightedGenres(genreScores, INTENTION_GENRES[intention] ?? [], 2.35);
   }
 
   keywordHints.push(...keywordHintListFromMap(input.feelings, FEELING_HINTS));
@@ -671,8 +766,8 @@ async function buildMoodSignals(input: StructuredMoodInput) {
   addWeightedGenres(genreScores, PACE_GENRES[input.pace], 1.1);
   addWeightedGenres(genreScores, INTENSITY_GENRES[input.intensity], 1.2);
   addWeightedGenres(genreScores, DARKNESS_GENRES[input.darkness], 1.1);
-  addWeightedGenres(genreScores, BRAINPOWER_GENRES[input.brainpower], 1);
-  addWeightedGenres(genreScores, CONTEXT_GENRES[input.watchContext], 1);
+  addWeightedGenres(genreScores, BRAINPOWER_GENRES[input.brainpower], 1.05);
+  addWeightedGenres(genreScores, CONTEXT_GENRES[input.watchContext], 1.05);
 
   if (input.energy === "high") keywordHints.push("adrenaline", "fast-paced");
   if (input.energy === "low") keywordHints.push("comfort", "gentle");
@@ -688,13 +783,10 @@ async function buildMoodSignals(input: StructuredMoodInput) {
   if (input.watchContext === "friends") keywordHints.push("crowd pleasing", "fun");
   if (input.watchContext === "family") keywordHints.push("family friendly", "uplifting");
 
-  if (input.surpriseMe) {
-    addWeightedGenres(genreScores, [GENRES.MYSTERY, GENRES.SCI_FI, GENRES.THRILLER], 0.8);
-    keywordHints.push("unexpected twist", "fresh");
-  }
-
   let genreIds = topGenreIds(genreScores, 5);
-  if (genreIds.length < 3) genreIds = uniqInts(DEFAULT_GENRES, 5);
+  if (genreIds.length < 3) {
+    genreIds = uniqInts([...genreIds, ...DEFAULT_GENRES], 5);
+  }
 
   const keywordIds = await keywordIdsFromHints(keywordHints);
 
@@ -702,6 +794,7 @@ async function buildMoodSignals(input: StructuredMoodInput) {
     genreIds,
     keywordIds,
     keywordHints: uniqStrings(keywordHints, 8),
+    genreScores,
   };
 }
 
@@ -713,157 +806,154 @@ async function discoverWithFallback(opts: {
   providerIds: number[];
   genres: number[];
   keywords: number[];
-  page: number;
   excluded: Set<number>;
 }) {
-  const {
-    region,
-    maxRuntime,
-    ratingMin,
-    ratingMax,
-    providerIds,
-    genres,
-    keywords,
-    page,
-    excluded,
-  } = opts;
+  const { region, maxRuntime, ratingMin, ratingMax, providerIds, genres, keywords, excluded } =
+    opts;
 
-  const attempts: Array<{ name: string; params: Record<string, string | number | undefined> }> = [
-    {
-      name: "strict",
-      params: {
-        language: "en-GB",
-        region,
-        include_adult: "false",
-        sort_by: "popularity.desc",
-        with_genres: genres.length ? genres.join(",") : undefined,
-        with_keywords: keywords.length ? keywords.join("|") : undefined,
-        with_watch_providers: providerIds.length ? providerIds.join(",") : undefined,
-        watch_region: providerIds.length ? region : undefined,
-        "with_runtime.lte": maxRuntime,
-        "vote_average.gte": ratingMin,
-        "vote_average.lte": ratingMax,
-        "vote_count.gte": 50,
-        page,
-      },
-    },
-    {
-      name: "no_keywords",
-      params: {
-        language: "en-GB",
-        region,
-        include_adult: "false",
-        sort_by: "popularity.desc",
-        with_genres: genres.length ? genres.join(",") : undefined,
-        with_watch_providers: providerIds.length ? providerIds.join(",") : undefined,
-        watch_region: providerIds.length ? region : undefined,
-        "with_runtime.lte": maxRuntime,
-        "vote_average.gte": ratingMin,
-        "vote_average.lte": ratingMax,
-        "vote_count.gte": 20,
-        page: 1,
-      },
-    },
-    {
-      name: "no_providers_no_keywords",
-      params: {
-        language: "en-GB",
-        region,
-        include_adult: "false",
-        sort_by: "popularity.desc",
-        with_genres: genres.length ? genres.join(",") : undefined,
-        "with_runtime.lte": maxRuntime,
-        "vote_average.gte": ratingMin,
-        "vote_average.lte": ratingMax,
-        "vote_count.gte": 20,
-        page: 1,
-      },
-    },
-    {
-      name: "relaxed_filters",
-      params: {
-        language: "en-GB",
-        region,
-        include_adult: "false",
-        sort_by: "popularity.desc",
-        with_genres: genres.slice(0, 3).join(",") || undefined,
-        "with_runtime.lte": maxRuntime,
-        "vote_average.gte": Math.max(0, ratingMin - 2),
-        "vote_average.lte": ratingMax,
-        page: 1,
-      },
-    },
-  ];
+  const attempts: Array<{ name: string; params: Record<string, string | number | undefined> }> =
+    providerIds.length > 0
+      ? [
+          {
+            name: "strict_with_providers",
+            params: {
+              language: "en-GB",
+              region,
+              include_adult: "false",
+              sort_by: "popularity.desc",
+              with_genres: genres.length ? genres.join(",") : undefined,
+              with_keywords: keywords.length ? keywords.join("|") : undefined,
+              with_watch_providers: providerIds.join("|"),
+              with_watch_monetization_types: "flatrate",
+              watch_region: region,
+              "with_runtime.lte": maxRuntime,
+              "vote_average.gte": ratingMin,
+              "vote_average.lte": ratingMax,
+              "vote_count.gte": 50,
+            },
+          },
+          {
+            name: "no_keywords_with_providers",
+            params: {
+              language: "en-GB",
+              region,
+              include_adult: "false",
+              sort_by: "popularity.desc",
+              with_genres: genres.length ? genres.join(",") : undefined,
+              with_watch_providers: providerIds.join("|"),
+              with_watch_monetization_types: "flatrate",
+              watch_region: region,
+              "with_runtime.lte": maxRuntime,
+              "vote_average.gte": ratingMin,
+              "vote_average.lte": ratingMax,
+              "vote_count.gte": 20,
+            },
+          },
+          {
+            name: "relaxed_filters_with_providers",
+            params: {
+              language: "en-GB",
+              region,
+              include_adult: "false",
+              sort_by: "popularity.desc",
+              with_genres: genres.slice(0, 3).join(",") || undefined,
+              with_watch_providers: providerIds.join("|"),
+              with_watch_monetization_types: "flatrate",
+              watch_region: region,
+              "with_runtime.lte": maxRuntime,
+              "vote_average.gte": Math.max(0, ratingMin - 1),
+              "vote_average.lte": ratingMax,
+              "vote_count.gte": 10,
+            },
+          },
+        ]
+      : [
+          {
+            name: "strict",
+            params: {
+              language: "en-GB",
+              region,
+              include_adult: "false",
+              sort_by: "popularity.desc",
+              with_genres: genres.length ? genres.join(",") : undefined,
+              with_keywords: keywords.length ? keywords.join("|") : undefined,
+              "with_runtime.lte": maxRuntime,
+              "vote_average.gte": ratingMin,
+              "vote_average.lte": ratingMax,
+              "vote_count.gte": 50,
+            },
+          },
+          {
+            name: "no_keywords",
+            params: {
+              language: "en-GB",
+              region,
+              include_adult: "false",
+              sort_by: "popularity.desc",
+              with_genres: genres.length ? genres.join(",") : undefined,
+              "with_runtime.lte": maxRuntime,
+              "vote_average.gte": ratingMin,
+              "vote_average.lte": ratingMax,
+              "vote_count.gte": 20,
+            },
+          },
+          {
+            name: "relaxed_filters",
+            params: {
+              language: "en-GB",
+              region,
+              include_adult: "false",
+              sort_by: "popularity.desc",
+              with_genres: genres.slice(0, 3).join(",") || undefined,
+              "with_runtime.lte": maxRuntime,
+              "vote_average.gte": Math.max(0, ratingMin - 1),
+              "vote_average.lte": ratingMax,
+              "vote_count.gte": 10,
+            },
+          },
+        ];
 
-  for (const a of attempts) {
-    const discover = await tmdb<{ results?: TMDbMovie[] }>(
-      "/discover/movie",
-      a.params,
-      { revalidate: false }
-    );
+  for (const attempt of attempts) {
+    const pagesToTry = [1, 2];
+    const collected: TMDbMovie[] = [];
+    const seen = new Set<number>();
 
-    const results = Array.isArray(discover?.results) ? discover.results : [];
+    for (const page of pagesToTry) {
+      const discover = await tmdb<{ results?: TMDbMovie[] }>(
+        "/discover/movie",
+        { ...attempt.params, page },
+        { revalidate: false }
+      );
 
-    const candidates = results.filter((m) => {
-      const id = Number(m?.id);
-      return Number.isFinite(id) && !excluded.has(id);
-    });
+      const results = Array.isArray(discover?.results) ? discover.results : [];
 
-    if (candidates.length) {
-      return { attempt: a.name, pageUsed: Number(a.params.page ?? 1), candidates };
+      for (const movie of results) {
+        const id = Number(movie?.id);
+        if (!Number.isFinite(id)) continue;
+        if (excluded.has(id)) continue;
+        if (seen.has(id)) continue;
+
+        seen.add(id);
+        collected.push(movie);
+
+        if (collected.length >= 30) break;
+      }
+
+      if (collected.length >= 30) break;
+    }
+
+    if (collected.length) {
+      return {
+        attempt: attempt.name,
+        candidates: collected,
+      };
     }
   }
 
-  return { attempt: "none", pageUsed: 1, candidates: [] as TMDbMovie[] };
-}
-
-function pickTopMatches(args: {
-  scored: { m: TMDbMovie; match: number }[];
-  total: number;
-  surpriseMe: boolean;
-  rng: () => number;
-}) {
-  const { scored, total, surpriseMe, rng } = args;
-  if (!scored.length) return [];
-
-  if (!surpriseMe) {
-    return scored.slice(0, total);
-  }
-
-  const best = scored[0]?.match ?? 0;
-  const heroPool = scored.filter((item) => item.match >= best - 0.08).slice(0, 12);
-  const restPool = scored.slice(0, 20);
-
-  const used = new Set<number>();
-  const picked: { m: TMDbMovie; match: number }[] = [];
-
-  const hero =
-    heroPool[Math.floor(rng() * Math.max(1, heroPool.length))] ?? scored[0];
-
-  picked.push(hero);
-  used.add(Number(hero.m.id));
-
-  const shuffledRest = [...restPool].sort(() => rng() - 0.5);
-
-  for (const item of shuffledRest) {
-    if (picked.length >= total) break;
-    const id = Number(item.m.id);
-    if (used.has(id)) continue;
-    picked.push(item);
-    used.add(id);
-  }
-
-  if (picked.length < total) {
-    for (const item of scored) {
-      if (picked.length >= total) break;
-      const id = Number(item.m.id);
-      if (used.has(id)) continue;
-      picked.push(item);
-      used.add(id);
-    }
-  }
-
-  return picked.slice(0, total);
+  return {
+    attempt: "none",
+    candidates: [] as TMDbMovie[],
+  };
 }
 
 function buildDebugPayload(
@@ -878,7 +968,7 @@ export async function GET() {
     ok: true,
     endpoint: "recommendations",
     mode: "structured_mood_hybrid_rules",
-    tasteSources: ["favorites_items", "film_feedback", "watchlist_items"],
+    tasteSources: ["favorites_items", "film_feedback", "watchlist_items", "profiles.top_four_ids"],
     supports: {
       feelings: true,
       intentions: true,
@@ -907,8 +997,7 @@ export async function POST(req: Request) {
 
     const structuredInput = getStructuredInput(body);
     const hasCoreInput =
-      structuredInput.feelings.length > 0 ||
-      structuredInput.intentions.length > 0;
+      structuredInput.feelings.length > 0 || structuredInput.intentions.length > 0;
 
     if (!hasCoreInput) {
       return ok(
@@ -930,17 +1019,24 @@ export async function POST(req: Request) {
     const ratingMax = Math.max(minRating, maxRating);
 
     const providerIds = uniqInts(body.providerIds, 10);
-    const surpriseMe = Boolean(body.surpriseMe);
-
-    const seedIn = Number(body.seed ?? Date.now());
-    const seedUsed = Number.isFinite(seedIn) ? seedIn : Date.now();
-    const rng = mulberry32(seedUsed);
 
     const moodSignals = await buildMoodSignals(structuredInput);
-    const genreIds = uniqInts(body.genreIds ?? moodSignals.genreIds, 5);
+    const taste = await buildUserTasteProfile(supabase, userId);
+
+    let genreIds = uniqInts(body.genreIds ?? moodSignals.genreIds, 5);
+    if (genreIds.length < 3) {
+      genreIds = uniqInts(
+        [...genreIds, ...topGenreIds(taste.likedGenres, 3), ...DEFAULT_GENRES],
+        5
+      );
+    }
+
     const keywordIds = uniqInts(body.keywordIds ?? moodSignals.keywordIds, 5);
 
-    const taste = await buildUserTasteProfile(supabase, userId);
+    const targetGenreWeights = new Map<number, number>();
+    for (const genreId of genreIds) {
+      targetGenreWeights.set(genreId, moodSignals.genreScores.get(genreId) ?? 1);
+    }
 
     const found = await discoverWithFallback({
       region,
@@ -950,14 +1046,11 @@ export async function POST(req: Request) {
       providerIds,
       genres: genreIds,
       keywords: keywordIds,
-      page: surpriseMe ? Math.floor(rng() * 20) + 1 : 1,
       excluded: taste.excludedTmdbIds,
     });
 
     const debugPayload = buildDebugPayload(process.env.NODE_ENV === "development", {
       attempt: found.attempt,
-      pageUsed: found.pageUsed,
-      seedUsed,
       runtime: {
         requested: requestedMaxRuntime,
         effective: effectiveMaxRuntime,
@@ -967,6 +1060,10 @@ export async function POST(req: Request) {
         keywordHints: moodSignals.keywordHints,
         genreIds,
         keywordIds,
+      },
+      filters: {
+        providerIds,
+        providerFilterActive: providerIds.length > 0,
       },
       personalization: {
         watchedCount: taste.watchedTmdbIds.size,
@@ -988,52 +1085,80 @@ export async function POST(req: Request) {
       });
     }
 
-    const target = new Set<number>(genreIds);
-
     const scored = candidates
       .filter((m) => !taste.dislikedTmdbIds.has(Number(m.id)))
       .map((m: TMDbMovie) => ({
         m,
-        match: scoreMatchAdvanced(m, target, taste),
+        match: scoreMatchAdvanced(m, targetGenreWeights, taste),
       }))
       .sort((a, b) => b.match - a.match);
 
-    const picked = pickTopMatches({
-      scored,
-      total: 4,
-      surpriseMe,
-      rng,
-    });
+    const prelim = scored.slice(0, 12);
 
-    const baseItems: RecoItem[] = picked.map((p) => ({
-      tmdbId: Number(p.m.id),
-      title: String(p.m.title ?? "Untitled"),
-      poster: p.m.poster_path ? posterUrl(p.m.poster_path, "w342") : null,
-      match: Number(p.match.toFixed(2)),
-      genreIds: Array.isArray(p.m.genre_ids) ? p.m.genre_ids : [],
-      bestDeal: null,
-    }));
+    const enriched = await Promise.all(
+      prelim.map(async ({ m, match }) => {
+        const item: RecoItem = {
+          tmdbId: Number(m.id),
+          title: String(m.title ?? "Untitled"),
+          poster: m.poster_path ? posterUrl(m.poster_path, "w342") : null,
+          match: Number(match.toFixed(2)),
+          genreIds: Array.isArray(m.genre_ids) ? m.genre_ids : [],
+          bestDeal: null,
+        };
 
-    const withDeals = await Promise.all(
-      baseItems.map(async (it) => {
         try {
           const wp = await tmdb<WatchProvidersResponse>(
-            `/movie/${it.tmdbId}/watch/providers`,
+            `/movie/${item.tmdbId}/watch/providers`,
             {},
             { revalidate: false }
           );
-          return { ...it, bestDeal: bestDeal(wp, region) };
+
+          const providerMatched = hasSelectedStreamProvider(wp, region, providerIds);
+          const deal = bestDeal(wp, region, providerIds);
+
+          const providerBoost =
+            providerIds.length > 0 && providerMatched ? 0.12 : 0;
+
+          const streamBoost = deal?.type === "stream" ? 0.03 : 0;
+
+          return {
+            ...item,
+            bestDeal: deal,
+            providerMatched,
+            finalMatch: clamp(match + providerBoost + streamBoost, 0, 1),
+          };
         } catch {
-          return it;
+          return {
+            ...item,
+            providerMatched: providerIds.length === 0,
+            finalMatch: match,
+          };
         }
       })
     );
 
+    const ranked =
+      providerIds.length > 0
+        ? enriched.filter((item) => item.providerMatched)
+        : enriched;
+
+    const finalItems = ranked
+      .sort((a, b) => b.finalMatch - a.finalMatch)
+      .slice(0, 4)
+      .map((item) => ({
+        tmdbId: item.tmdbId,
+        title: item.title,
+        poster: item.poster,
+        match: Number(item.finalMatch.toFixed(2)),
+        genreIds: item.genreIds,
+        bestDeal: item.bestDeal,
+      }));
+
     return ok({
       ok: true,
       status: "ready",
-      item: withDeals[0] ?? null,
-      items: withDeals,
+      item: finalItems[0] ?? null,
+      items: finalItems,
       ...(debugPayload ? { debug: debugPayload } : {}),
     });
   } catch (error: unknown) {

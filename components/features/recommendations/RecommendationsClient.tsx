@@ -107,39 +107,6 @@ export default function RecommendationsClient() {
   return (
     <section className="container py-8 sm:py-10">
       <div className="grid gap-6">
-        <section className="border-2 border-black bg-[var(--surface)]">
-          <div className="grid border-b-2 border-black sm:grid-cols-3">
-            <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
-              Mood-first discovery
-            </div>
-            <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
-              Personal taste
-            </div>
-            <div className="px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
-              Filtered picks
-            </div>
-          </div>
-
-          <div className="grid gap-5 p-4 sm:p-6 md:grid-cols-[1fr_auto] md:items-end md:p-8">
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
-                Recommendation builder
-              </p>
-              <h1 className="mt-4 text-3xl font-extrabold uppercase leading-[0.92] tracking-[-0.08em] text-[var(--foreground)] sm:text-5xl">
-                Find a film for how you feel.
-              </h1>
-              <p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--muted)] sm:text-base">
-                Start with a quick mood, refine the kind of night you want, and let Feelix return a
-                best match with strong alternatives.
-              </p>
-            </div>
-
-            <Link href="/" className="btn btn-ghost text-center md:w-auto">
-              Back Home
-            </Link>
-          </div>
-        </section>
-
         {builder.err ? (
           <div className="border-2 border-black bg-[var(--surface-strong)] px-4 py-4 text-sm text-[var(--foreground)]">
             {builder.err}
