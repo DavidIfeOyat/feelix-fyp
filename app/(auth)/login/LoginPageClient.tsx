@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -37,7 +37,6 @@ function resolveRedirect(rawFrom: string | null) {
 }
 
 export default function LoginPageClient() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   const supabase = useMemo(() => createSupabaseBrowser(), []);
@@ -48,19 +47,19 @@ export default function LoginPageClient() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<AuthMsg>(() => {
+  const [msg, setMsg] = useState<AuthMsg>(null);
+
+  useEffect(() => {
     if (searchParams.get("created") === "1") {
-      return { type: "success", text: "Account created. You can sign in now." };
+      setMsg({ type: "success", text: "Account created. You can sign in now." });
     }
-    return null;
-  });
+  }, [searchParams]);
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace(from);
-      router.refresh();
+      window.location.replace(from);
     }
-  }, [loading, user, from, router]);
+  }, [loading, user, from]);
 
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -83,8 +82,7 @@ export default function LoginPageClient() {
 
       if (error) throw error;
 
-      router.replace(from);
-      router.refresh();
+      window.location.assign(from);
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : "Login failed.";
       setMsg({ type: "error", text: friendlyAuthError(raw) });
