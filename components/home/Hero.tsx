@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import useSWR from "swr";
+import { useEffect, useMemo, useState } from "react";
 
 type Film = {
   tmdbId: number;
@@ -13,22 +14,46 @@ type Film = {
 type FilmsResponse = { items: Film[] };
 
 const fetcher = async (url: string): Promise<FilmsResponse> => {
-  const response = await fetch(url);
+  const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Failed to load films");
   }
   return response.json() as Promise<FilmsResponse>;
 };
 
-function pickDaily<T>(arr: T[]) {
+function getDayKey(date = new Date()) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function getDayNumber(date = new Date()) {
+  return Math.floor(date.getTime() / 86400000);
+}
+
+function pickDaily<T>(arr: T[], dayNumber: number) {
   if (!arr.length) return null;
-  const day = Math.floor(Date.now() / 86400000);
-  return arr[day % arr.length];
+  return arr[dayNumber % arr.length];
 }
 
 export default function Hero({ isAuthed }: { isAuthed: boolean }) {
-  const { data } = useSWR<FilmsResponse>("/api/films?list=trending&limit=20", fetcher);
-  const film = pickDaily(data?.items ?? []);
+  const [dayKey, setDayKey] = useState(() => getDayKey());
+
+  const { data } = useSWR<FilmsResponse>("/api/films?list=trending&limit=20", fetcher, {
+    revalidateOnFocus: true,
+    refreshInterval: 1000 * 60 * 30,
+  });
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const nextKey = getDayKey();
+      setDayKey((current) => (current === nextKey ? current : nextKey));
+    }, 1000 * 60);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const film = useMemo(() => {
+    return pickDaily(data?.items ?? [], getDayNumber(new Date(dayKey)));
+  }, [data?.items, dayKey]);
 
   const recHref = isAuthed ? "/recommendations" : "/login?from=/recommendations";
   const browseHref = isAuthed ? "/films" : "/login?from=/films";
@@ -60,7 +85,10 @@ export default function Hero({ isAuthed }: { isAuthed: boolean }) {
             </Link>
 
             {!isAuthed ? (
-              <Link href={signupHref} className="btn btn-ghost text-center min-[420px]:col-span-2 lg:w-fit">
+              <Link
+                href={signupHref}
+                className="btn btn-ghost text-center min-[420px]:col-span-2 lg:w-fit"
+              >
                 Create Account
               </Link>
             ) : null}
