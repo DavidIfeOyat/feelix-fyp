@@ -1,20 +1,31 @@
-﻿import { Suspense } from "react";
-import LoginPageClient from "./LoginPageClient";
+﻿import LoginPageClient from "./LoginPageClient";
 
-function AuthFallback() {
-  return (
-    <section className="container py-10 sm:py-14">
-      <div className="mx-auto max-w-md border-2 border-black bg-[var(--surface)]">
-        <div className="px-5 py-6 text-sm text-[var(--muted)]">Loading...</div>
-      </div>
-    </section>
-  );
+type PageProps = {
+  searchParams: Promise<{
+    from?: string | string[] | undefined;
+    created?: string | string[] | undefined;
+  }>;
+};
+
+function first(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<AuthFallback />}>
-      <LoginPageClient />
-    </Suspense>
-  );
+function resolveRedirect(rawFrom: string | null) {
+  const fallback = "/dashboard";
+
+  if (!rawFrom) return fallback;
+  if (!rawFrom.startsWith("/") || rawFrom.startsWith("//")) return fallback;
+  if (rawFrom.startsWith("/login") || rawFrom.startsWith("/signup")) return fallback;
+
+  return rawFrom;
+}
+
+export default async function LoginPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+
+  const from = resolveRedirect(first(sp.from) ?? null);
+  const created = first(sp.created) === "1";
+
+  return <LoginPageClient from={from} created={created} />;
 }

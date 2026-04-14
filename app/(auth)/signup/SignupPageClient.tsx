@@ -7,43 +7,39 @@ import { useAuth } from "@/hooks/useAuth";
 
 type AuthMsg = { type: "error" | "success"; text: string } | null;
 
-type LoginPageClientProps = {
+type SignupPageClientProps = {
   from: string;
-  created: boolean;
 };
 
-function friendlyAuthError(message: string) {
+function friendlySignupError(message: string) {
   const m = message.toLowerCase();
 
-  if (m.includes("invalid login credentials")) {
-    return "Incorrect email or password.";
+  if (m.includes("user already registered")) {
+    return "An account with that email already exists.";
   }
 
-  if (m.includes("email not confirmed")) {
-    return "Please confirm your email before signing in.";
+  if (m.includes("password")) {
+    return "Please choose a stronger password.";
   }
 
   if (m.includes("too many requests")) {
     return "Too many attempts. Try again in a minute.";
   }
 
-  return "Sign in failed. Please try again.";
+  return "Sign up failed. Please try again.";
 }
 
-export default function LoginPageClient({
-  from,
-  created,
-}: LoginPageClientProps) {
+export default function SignupPageClient({ from }: SignupPageClientProps) {
   const { user, loading } = useAuth();
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<AuthMsg>(
-    created ? { type: "success", text: "Account created. You can sign in now." } : null
-  );
+  const [msg, setMsg] = useState<AuthMsg>(null);
 
   useEffect(() => {
     if (!loading && user) {
@@ -51,31 +47,58 @@ export default function LoginPageClient({
     }
   }, [loading, user, from]);
 
-  async function onLogin(e: React.FormEvent<HTMLFormElement>) {
+  async function onSignup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
     setMsg(null);
 
     const cleanEmail = email.trim().toLowerCase();
 
-    if (!cleanEmail || !password) {
-      setMsg({ type: "error", text: "Enter both your email and password." });
+    if (!cleanEmail || !password || !confirmPassword) {
+      setMsg({ type: "error", text: "Complete all fields." });
+      setBusy(false);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setMsg({ type: "error", text: "Passwords do not match." });
+      setBusy(false);
+      return;
+    }
+
+    if (password.length < 8) {
+      setMsg({ type: "error", text: "Password must be at least 8 characters." });
       setBusy(false);
       return;
     }
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : "";
+
+      const redirectTo = `${origin}/login?created=1&from=${encodeURIComponent(from)}`;
+
+      const { error } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
+        options: {
+          emailRedirectTo: redirectTo,
+        },
       });
 
       if (error) throw error;
 
-      window.location.assign(from);
+      setMsg({
+        type: "success",
+        text: "Account created. Check your email to confirm your account.",
+      });
+
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
     } catch (err: unknown) {
-      const raw = err instanceof Error ? err.message : "Login failed.";
-      setMsg({ type: "error", text: friendlyAuthError(raw) });
+      const raw = err instanceof Error ? err.message : "Sign up failed.";
+      setMsg({ type: "error", text: friendlySignupError(raw) });
     } finally {
       setBusy(false);
     }
@@ -99,12 +122,12 @@ export default function LoginPageClient({
             Feelix
           </p>
           <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)]">
-            Sign In
+            Create Account
           </h1>
         </div>
 
         <div className="p-5 sm:p-6">
-          <form onSubmit={onLogin} className="grid gap-5">
+          <form onSubmit={onSignup} className="grid gap-5">
             <label className="grid gap-2">
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Email
@@ -130,11 +153,11 @@ export default function LoginPageClient({
               <div className="grid grid-cols-[1fr_auto] gap-2">
                 <input
                   type={showPw ? "text" : "password"}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   className="w-full"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder="Create password"
                   required
                   disabled={busy}
                 />
@@ -151,6 +174,35 @@ export default function LoginPageClient({
               </div>
             </label>
 
+            <label className="grid gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Confirm Password
+              </span>
+
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  type={showConfirmPw ? "text" : "password"}
+                  autoComplete="new-password"
+                  className="w-full"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm password"
+                  required
+                  disabled={busy}
+                />
+
+                <button
+                  type="button"
+                  className="border-2 border-black px-4 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--foreground)] transition hover:bg-black hover:text-[var(--background)] disabled:opacity-50"
+                  onClick={() => setShowConfirmPw((v) => !v)}
+                  aria-label={showConfirmPw ? "Hide password" : "Show password"}
+                  disabled={busy}
+                >
+                  {showConfirmPw ? "Hide" : "Show"}
+                </button>
+              </div>
+            </label>
+
             {msg ? (
               <div className="border border-black bg-[var(--surface-strong)] px-4 py-3 text-sm text-[var(--foreground)]">
                 {msg.text}
@@ -159,24 +211,24 @@ export default function LoginPageClient({
 
             <div className="grid gap-3 pt-2">
               <button className="btn btn-primary w-full" disabled={busy} type="submit">
-                {busy ? "Signing in..." : "Sign in"}
+                {busy ? "Creating account..." : "Create account"}
               </button>
 
               <Link
-                href={`/signup?from=${encodeURIComponent(from)}`}
+                href={`/login?from=${encodeURIComponent(from)}`}
                 className="btn btn-ghost text-center"
               >
-                Create account
+                Sign in instead
               </Link>
             </div>
 
             <div className="border-t border-black pt-4 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-              Don’t have an account?{" "}
+              Already have an account?{" "}
               <Link
                 className="text-[var(--foreground)] underline-offset-4 hover:underline"
-                href={`/signup?from=${encodeURIComponent(from)}`}
+                href={`/login?from=${encodeURIComponent(from)}`}
               >
-                Create one
+                Sign in
               </Link>
             </div>
 
