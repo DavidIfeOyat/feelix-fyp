@@ -114,61 +114,111 @@ export default function SignUpPage() {
 
   return (
     <section className="container py-10 sm:py-14">
-      <div className="mx-auto max-w-5xl border-2 border-black bg-[var(--surface)]">
-        <div className="grid md:grid-cols-[0.95fr_1.05fr]">
-          <div className="border-b-2 border-black p-5 sm:p-6 md:border-b-0 md:border-r-2 md:p-8">
-            <Link
-              href="/"
-              className="inline-block text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--foreground)]"
-            >
-              Feelix / Film Library
-            </Link>
+      <div className="mx-auto max-w-md border-2 border-black bg-[var(--surface)]">
+        <div className="border-b-2 border-black px-5 py-4 sm:px-6">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
+            Feelix
+          </p>
+          <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)]">
+            Create Account
+          </h1>
+        </div>
 
-            <div className="mt-8">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
-                Create account
-              </p>
+        <div className="p-5 sm:p-6">
+          <form onSubmit={onSubmit} className="grid gap-5">
+            <label className="grid gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Username
+              </span>
+              <input
+                type="text"
+                autoComplete="username"
+                className="w-full"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="your_username"
+                disabled={loading}
+                required
+              />
+            </label>
 
-              <h1 className="mt-4 text-4xl font-extrabold uppercase leading-[0.92] tracking-[-0.08em] text-[var(--foreground)] sm:text-5xl">
-                Start your collection.
-              </h1>
+            <label className="grid gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Email
+              </span>
+              <input
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                className="w-full"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                disabled={loading}
+                required
+              />
+            </label>
 
-              <p className="mt-5 max-w-md text-sm leading-7 text-[var(--muted)] sm:text-base">
-                Build a personal film space with recommendations, saved lists, favourites,
-                and a visible profile shaped around your taste.
-              </p>
+            <label className="grid gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Password
+              </span>
+
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  type={showPw ? "text" : "password"}
+                  autoComplete="new-password"
+                  className="w-full"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  disabled={loading}
+                  required
+                />
+
+                <button
+                  type="button"
+                  className="border-2 border-black px-4 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--foreground)] transition hover:bg-black hover:text-[var(--background)] disabled:opacity-50"
+                  onClick={() => setShowPw((v) => !v)}
+                  aria-label={showPw ? "Hide password" : "Show password"}
+                  disabled={loading}
+                >
+                  {showPw ? "Hide" : "Show"}
+                </button>
+              </div>
+            </label>
+
+            <p className="text-[11px] leading-6 text-[var(--muted)]">
+              Usernames can use letters, numbers, and underscores. Passwords must be at least 8 characters.
+            </p>
+
+            {err ? (
+              <div className="border border-black bg-[var(--surface-strong)] px-4 py-3 text-sm text-[var(--foreground)]">
+                {err}
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 pt-2">
+              <button className="btn btn-primary w-full" disabled={loading} type="submit">
+                {loading ? "Creating account..." : "Create account"}
+              </button>
+
+              <Link href="/login" className="btn btn-ghost text-center">
+                Sign in instead
+              </Link>
             </div>
 
-            <div className="mt-10 grid gap-3 sm:grid-cols-3 md:grid-cols-1">
-              <div className="border border-black px-4 py-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
-                  01
-                </p>
-                <p className="mt-2 text-sm font-semibold uppercase tracking-[-0.03em] text-[var(--foreground)]">
-                  Save films
-                </p>
-              </div>
-
-              <div className="border border-black px-4 py-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
-                  02
-                </p>
-                <p className="mt-2 text-sm font-semibold uppercase tracking-[-0.03em] text-[var(--foreground)]">
-                  Get recommendations
-                </p>
-              </div>
-
-              <div className="border border-black px-4 py-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
-                  03
-                </p>
-                <p className="mt-2 text-sm font-semibold uppercase tracking-[-0.03em] text-[var(--foreground)]">
-                  Share your taste
-                </p>
-              </div>
+            <div className="border-t border-black pt-4 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
+              Already have an account?{" "}
+              <Link
+                className="text-[var(--foreground)] underline-offset-4 hover:underline"
+                href="/login"
+              >
+                Sign in
+              </Link>
             </div>
 
-            <div className="mt-10 border-t-2 border-black pt-5">
+            <div className="text-center">
               <Link
                 href="/"
                 className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--foreground)] underline-offset-4 hover:underline"
@@ -176,113 +226,7 @@ export default function SignUpPage() {
                 Back to home
               </Link>
             </div>
-          </div>
-
-          <div className="p-5 sm:p-6 md:p-8">
-            <div className="border-b-2 border-black pb-5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
-                New member setup
-              </p>
-              <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                Create an account with a username, email, and password to start building your
-                Feelix profile.
-              </p>
-            </div>
-
-            <form onSubmit={onSubmit} className="grid gap-5 pt-5">
-              <label className="grid gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Username
-                </span>
-                <input
-                  type="text"
-                  autoComplete="username"
-                  className="w-full"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="your_username"
-                  disabled={loading}
-                  required
-                />
-              </label>
-
-              <label className="grid gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Email
-                </span>
-                <input
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  className="w-full"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@uni.ac.uk"
-                  disabled={loading}
-                  required
-                />
-              </label>
-
-              <label className="grid gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Password
-                </span>
-
-                <div className="grid grid-cols-[1fr_auto] gap-2">
-                  <input
-                    type={showPw ? "text" : "password"}
-                    autoComplete="new-password"
-                    className="w-full"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 8 characters"
-                    disabled={loading}
-                    required
-                  />
-
-                  <button
-                    type="button"
-                    className="border-2 border-black px-4 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--foreground)] transition hover:bg-black hover:text-[var(--background)] disabled:opacity-50"
-                    onClick={() => setShowPw((v) => !v)}
-                    aria-label={showPw ? "Hide password" : "Show password"}
-                    disabled={loading}
-                  >
-                    {showPw ? "Hide" : "Show"}
-                  </button>
-                </div>
-              </label>
-
-              <p className="text-[11px] leading-6 text-[var(--muted)]">
-                Usernames can use letters, numbers, and underscores. Passwords should be at least 8 characters.
-              </p>
-
-              {err ? (
-                <div className="border border-black bg-[var(--surface-strong)] px-4 py-3 text-sm text-[var(--foreground)]">
-                  {err}
-                </div>
-              ) : null}
-
-              <div className="grid gap-3 border-t-2 border-black pt-5">
-                <button className="btn btn-primary w-full" disabled={loading} type="submit">
-                  {loading ? "Creating account..." : "Create account"}
-                </button>
-
-                <Link href="/login" className="btn btn-ghost text-center">
-                  Sign in instead
-                </Link>
-              </div>
-
-              <div className="border-t border-black pt-4 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                Already have an account?{" "}
-                <Link
-                  className="text-[var(--foreground)] underline-offset-4 hover:underline"
-                  href="/login"
-                >
-                  Sign in
-                </Link>
-              </div>
-            </form>
-          </div>
+          </form>
         </div>
       </div>
     </section>
