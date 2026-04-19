@@ -29,10 +29,15 @@ function friendlySignupError(message: string) {
   return "Sign up failed. Please try again.";
 }
 
+function isValidUsername(value: string) {
+  return /^[a-zA-Z0-9_]{3,20}$/.test(value);
+}
+
 export default function SignupPageClient({ from }: SignupPageClientProps) {
   const { user, loading } = useAuth();
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -52,10 +57,20 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
     setBusy(true);
     setMsg(null);
 
+    const cleanUsername = username.trim();
     const cleanEmail = email.trim().toLowerCase();
 
-    if (!cleanEmail || !password || !confirmPassword) {
+    if (!cleanUsername || !cleanEmail || !password || !confirmPassword) {
       setMsg({ type: "error", text: "Complete all fields." });
+      setBusy(false);
+      return;
+    }
+
+    if (!isValidUsername(cleanUsername)) {
+      setMsg({
+        type: "error",
+        text: "Username must be 3–20 characters and use only letters, numbers, or underscores.",
+      });
       setBusy(false);
       return;
     }
@@ -73,26 +88,33 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
     }
 
     try {
-      const origin =
-        typeof window !== "undefined" ? window.location.origin : "";
-
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
       const redirectTo = `${origin}/login?created=1&from=${encodeURIComponent(from)}`;
 
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
         options: {
           emailRedirectTo: redirectTo,
+          data: {
+            username: cleanUsername,
+          },
         },
       });
 
       if (error) throw error;
 
+      if (data.session) {
+        window.location.assign(from);
+        return;
+      }
+
       setMsg({
         type: "success",
-        text: "Account created. Check your email to confirm your account.",
+        text: "Account created. Check your email to confirm, then sign in.",
       });
 
+      setUsername("");
       setEmail("");
       setPassword("");
       setConfirmPassword("");
@@ -128,6 +150,22 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
 
         <div className="p-5 sm:p-6">
           <form onSubmit={onSignup} className="grid gap-5">
+            <label className="grid gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Username
+              </span>
+              <input
+                type="text"
+                autoComplete="username"
+                className="w-full"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="your_username"
+                required
+                disabled={busy}
+              />
+            </label>
+
             <label className="grid gap-2">
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Email
@@ -202,6 +240,10 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
                 </button>
               </div>
             </label>
+
+            <p className="text-[11px] leading-6 text-[var(--muted)]">
+              Usernames can use letters, numbers, and underscores. Passwords must be at least 8 characters.
+            </p>
 
             {msg ? (
               <div className="border border-black bg-[var(--surface-strong)] px-4 py-3 text-sm text-[var(--foreground)]">
