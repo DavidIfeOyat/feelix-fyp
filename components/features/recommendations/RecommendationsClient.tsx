@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import * as recoConfig from "@/lib/reco/config";
-import { ScheduleWatchModal } from "@/components/features/recommendations/ScheduleWatchModal";
+
 import { RecommendationsLoadingState } from "@/components/features/recommendations/RecommendationsLoadingState";
-import { useRecommendationBuilder } from "@/hooks/useRecommendationBuilder";
 import { RecommendationsMoodStep } from "@/components/features/recommendations/RecommendationsMoodStep";
 import { RecommendationsRefineStep } from "@/components/features/recommendations/RecommendationsRefineStep";
 import { RecommendationsResults } from "@/components/features/recommendations/RecommendationsResults";
+import { ScheduleWatchModal } from "@/components/features/recommendations/ScheduleWatchModal";
+import { useRecommendationBuilder } from "@/hooks/useRecommendationBuilder";
+import * as recoConfig from "@/lib/reco/config";
 
 const FEELING_OPTIONS = Array.isArray(recoConfig.FEELING_OPTIONS)
   ? recoConfig.FEELING_OPTIONS
@@ -64,6 +65,7 @@ export default function RecommendationsClient() {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Recommendations
             </p>
+
             <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
               Loading
             </h1>
@@ -82,9 +84,11 @@ export default function RecommendationsClient() {
               <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                 Recommendations
               </p>
+
               <h1 className="mt-4 text-3xl font-extrabold uppercase leading-[0.92] tracking-[-0.08em] text-[var(--foreground)] sm:text-5xl">
                 Sign in to get recommendations.
               </h1>
+
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-base">
                 Feelix builds suggestions from your mood, your filters, and your saved taste.
               </p>
@@ -94,6 +98,7 @@ export default function RecommendationsClient() {
               <Link className="btn btn-primary text-center" href="/login?from=/recommendations">
                 Sign In
               </Link>
+
               <Link className="btn btn-ghost text-center" href="/signup">
                 Create Account
               </Link>

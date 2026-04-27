@@ -10,15 +10,13 @@ const ROTATING_MESSAGES = [
   "Preparing your final recommendation set...",
 ] as const;
 
-function LoadingStage({
-  label,
-  active,
-  complete,
-}: {
+type LoadingStageProps = {
   label: string;
   active: boolean;
   complete: boolean;
-}) {
+};
+
+function LoadingStage({ label, active, complete }: LoadingStageProps) {
   return (
     <div
       className={`border-2 px-4 py-4 transition ${
@@ -32,6 +30,7 @@ function LoadingStage({
       <p className="text-[9px] font-bold uppercase tracking-[0.18em] sm:text-[10px]">
         {complete ? "Done" : active ? "Working" : "Pending"}
       </p>
+
       <p className="mt-2 text-sm font-bold uppercase tracking-[0.06em] sm:text-base">
         {label}
       </p>
@@ -64,9 +63,11 @@ export function RecommendationsLoadingState() {
     if (elapsedSeconds < 2) {
       return { current: 0, completed: -1 };
     }
+
     if (elapsedSeconds < 4) {
       return { current: 1, completed: 0 };
     }
+
     return { current: 2, completed: 1 };
   }, [elapsedSeconds]);
 
@@ -91,9 +92,11 @@ export function RecommendationsLoadingState() {
             <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] sm:text-[10px]">
               Live status
             </p>
+
             <p className="mt-2 text-base font-bold uppercase tracking-[0.02em] text-[var(--foreground)] sm:text-lg">
               {activeMessage}
             </p>
+
             <p className="mt-3 text-xs leading-6 text-[var(--muted)]">
               This can take a few seconds while the app scores and filters candidate films.
             </p>

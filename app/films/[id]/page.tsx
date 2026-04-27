@@ -1,4 +1,5 @@
 import Link from "next/link";
+
 import FilmDetailActionBar from "@/components/features/films/FilmDetailActionBar";
 import {
   backdropUrl,
@@ -29,22 +30,28 @@ function tabBtn(active: boolean) {
 
 function isRecentRelease(releaseDate: string | null) {
   if (!releaseDate) return false;
+
   const date = new Date(releaseDate);
   if (Number.isNaN(date.getTime())) return false;
+
   return date.getTime() > Date.now() - 90 * 24 * 60 * 60 * 1000;
 }
+
+type FilmDetailPageProps = {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tab?: string }> | { tab?: string };
+};
 
 export default async function FilmDetailPage({
   params,
   searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<{ tab?: string }> | { tab?: string };
-}) {
+}: FilmDetailPageProps) {
   const { id: raw } = await params;
   const id = Number(raw);
 
-  const sp = (searchParams instanceof Promise ? await searchParams : searchParams) ?? {};
+  const sp =
+    (searchParams instanceof Promise ? await searchParams : searchParams) ?? {};
+
   const tab = sp.tab === "trailer" ? "trailer" : "stream";
 
   if (!Number.isFinite(id)) {
@@ -52,6 +59,7 @@ export default async function FilmDetailPage({
       <section className="container py-8 sm:py-10">
         <div className="border-2 border-black bg-[var(--surface)] p-5">
           <p className="text-sm text-[var(--foreground)]">Invalid film id.</p>
+
           <Link className="btn btn-ghost mt-4" href="/films">
             Back to Films
           </Link>
@@ -60,6 +68,7 @@ export default async function FilmDetailPage({
     );
   }
 
+  // Load the core film data together so the page can render in one pass.
   const [movie, videos, providers] = await Promise.all([
     getMovie(id),
     getVideos(id),
@@ -68,15 +77,21 @@ export default async function FilmDetailPage({
 
   const prov = mapProviders(providers, region);
   const trailerUrl = pickTrailer(videos);
-  const trailerExternalHref = trailerUrl ? trailerUrl.replace("/embed/", "/watch?v=") : null;
+  const trailerExternalHref = trailerUrl
+    ? trailerUrl.replace("/embed/", "/watch?v=")
+    : null;
 
   const title = movie?.title ?? "Film";
   const poster = posterUrl(movie?.poster_path, "w500");
   const backdrop = backdropUrl(movie?.backdrop_path, "original");
   const overview = typeof movie?.overview === "string" ? movie.overview : "";
   const runtime = movie?.runtime ? `${movie.runtime} min` : "—";
-  const releaseDate = typeof movie?.release_date === "string" ? movie.release_date : null;
+
+  const releaseDate =
+    typeof movie?.release_date === "string" ? movie.release_date : null;
+
   const releaseYear = releaseDate?.slice(0, 4) ?? null;
+
   const rating =
     typeof movie?.vote_average === "number" && movie.vote_average > 0
       ? movie.vote_average.toFixed(1)
@@ -97,7 +112,9 @@ export default async function FilmDetailPage({
 
   const providerLink = prov.link || getJustWatchSearchLink(title, region);
   const cinemaLink = getCinemaLink(title);
-  const hasProviders = prov.stream.length + prov.rent.length + prov.buy.length > 0;
+  const hasProviders =
+    prov.stream.length + prov.rent.length + prov.buy.length > 0;
+
   const recentRelease = isRecentRelease(releaseDate);
 
   return (
@@ -117,13 +134,18 @@ export default async function FilmDetailPage({
             <div className="border-b-2 border-black bg-[var(--surface-strong)] p-5 sm:p-6 lg:border-b-0 lg:border-r-2">
               <div className="overflow-hidden border-2 border-black bg-[var(--surface)]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={poster} alt={title} className="aspect-[2/3] w-full object-cover" />
+                <img
+                  src={poster}
+                  alt={title}
+                  className="aspect-[2/3] w-full object-cover"
+                />
               </div>
 
               <div className="mt-5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                   Collection Entry
                 </p>
+
                 <h1 className="mt-3 text-3xl font-extrabold uppercase leading-[0.92] tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
                   {title}
                 </h1>
@@ -132,11 +154,13 @@ export default async function FilmDetailPage({
                   <span className="border border-black px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em]">
                     {runtime}
                   </span>
+
                   {releaseYear ? (
                     <span className="border border-black px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em]">
                       {releaseYear}
                     </span>
                   ) : null}
+
                   {rating ? (
                     <span className="border border-black px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em]">
                       Rating {rating}
@@ -144,7 +168,9 @@ export default async function FilmDetailPage({
                   ) : null}
                 </div>
 
-                <p className="mt-4 text-sm leading-7 text-[var(--muted)]">{genres}</p>
+                <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
+                  {genres}
+                </p>
               </div>
             </div>
 
@@ -163,13 +189,17 @@ export default async function FilmDetailPage({
                   <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                     Film overview
                   </p>
+
                   <p className="mt-3 text-sm leading-7 text-[var(--foreground)] sm:text-base">
                     {overview || "No overview is available for this film right now."}
                   </p>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
-                  <Link className={actionBtn("primary")} href={`/films/${id}?tab=trailer`}>
+                  <Link
+                    className={actionBtn("primary")}
+                    href={`/films/${id}?tab=trailer`}
+                  >
                     Play Trailer
                   </Link>
 
@@ -183,7 +213,10 @@ export default async function FilmDetailPage({
                       Find in Cinemas
                     </a>
                   ) : (
-                    <Link className={actionBtn("ghost")} href={`/films/${id}?tab=stream`}>
+                    <Link
+                      className={actionBtn("ghost")}
+                      href={`/films/${id}?tab=stream`}
+                    >
                       Where to Watch
                     </Link>
                   )}
@@ -220,6 +253,7 @@ export default async function FilmDetailPage({
                   <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                     Video
                   </p>
+
                   <h2 className="mt-2 text-3xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)]">
                     Trailer
                   </h2>
@@ -261,9 +295,11 @@ export default async function FilmDetailPage({
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                   Availability
                 </p>
+
                 <h2 className="mt-2 text-3xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)]">
                   Streaming Providers
                 </h2>
+
                 <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
                   Availability is provided by TMDB for region {region}.
                 </p>
@@ -280,6 +316,7 @@ export default async function FilmDetailPage({
                       <p className="text-sm leading-7 text-[var(--foreground)]">
                         Not yet on streaming. This title may still be in cinemas.
                       </p>
+
                       <a
                         href={cinemaLink}
                         target="_blank"
@@ -294,6 +331,7 @@ export default async function FilmDetailPage({
                       <p className="text-sm leading-7 text-[var(--foreground)]">
                         No providers were found for this region.
                       </p>
+
                       <a
                         href={providerLink}
                         target="_blank"
@@ -332,6 +370,7 @@ function ProviderRow({
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
             Provider group
           </p>
+
           <h3 className="mt-2 text-xl font-extrabold uppercase leading-none tracking-[-0.04em] text-[var(--foreground)]">
             {title}
           </h3>
@@ -354,6 +393,7 @@ function ProviderRow({
                 alt={item.name}
                 className="h-8 w-8 border border-black object-cover"
               />
+
               <span className="truncate text-[11px] font-bold uppercase tracking-[0.14em]">
                 {item.name}
               </span>

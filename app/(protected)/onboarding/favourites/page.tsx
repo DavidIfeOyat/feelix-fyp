@@ -1,24 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+
+import { MountRushmoreSection } from "@/components/features/profile/MountRushmoreSection";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfileHub } from "@/hooks/useProfileHub";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
-import { MountRushmoreSection } from "@/components/features/profile/MountRushmoreSection";
 
 export default function OnboardingFavoritesPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const hub = useProfileHub(user?.id);
+
+  // Stable client instance for onboarding persistence.
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [banner, setBanner] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const selected = hub.topFour.filter((x): x is number => typeof x === "number" && x > 0);
+  const selected = hub.topFour.filter(
+    (x): x is number => typeof x === "number" && x > 0
+  );
   const hasAtLeastOne = selected.length > 0;
 
   async function continueOnboarding() {
@@ -28,6 +33,8 @@ export default function OnboardingFavoritesPage() {
     setBusy(true);
 
     try {
+      // Persist the selected Mount Rushmore entries into favourites so the
+      // first recommendation pass already has some taste data to work from.
       const rows = hub.topFour
         .map((tmdbId, slotIndex) => {
           if (typeof tmdbId !== "number" || tmdbId <= 0) return null;
@@ -63,7 +70,9 @@ export default function OnboardingFavoritesPage() {
       router.push("/recommendations?onboarded=1");
     } catch (e: unknown) {
       setErr(
-        e instanceof Error ? e.message : "Failed to save onboarding favourites."
+        e instanceof Error
+          ? e.message
+          : "Failed to save onboarding favourites."
       );
     } finally {
       setBusy(false);
@@ -78,6 +87,7 @@ export default function OnboardingFavoritesPage() {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Onboarding
             </p>
+
             <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
               Loading
             </h1>
@@ -96,11 +106,14 @@ export default function OnboardingFavoritesPage() {
               <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                 Onboarding
               </p>
+
               <h1 className="mt-4 text-3xl font-extrabold uppercase leading-[0.92] tracking-[-0.08em] text-[var(--foreground)] sm:text-5xl">
                 Sign in to continue.
               </h1>
+
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-base">
-                Pick a favourite film so Feelix can personalise your first recommendations.
+                Pick a favourite film so Feelix can personalise your first
+                recommendations.
               </p>
             </div>
 
@@ -127,6 +140,7 @@ export default function OnboardingFavoritesPage() {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Onboarding
             </p>
+
             <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
               Loading profile setup
             </h1>
@@ -138,15 +152,17 @@ export default function OnboardingFavoritesPage() {
 
   return (
     <section className="container py-8 sm:py-10">
-      <div className="mx-auto max-w-5xl grid gap-6">
+      <div className="mx-auto grid max-w-5xl gap-6">
         <section className="border-2 border-black bg-[var(--surface)]">
           <div className="grid border-b-2 border-black sm:grid-cols-3">
             <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
               Taste setup
             </div>
+
             <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
               First recommendations
             </div>
+
             <div className="px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Mount Rushmore
             </div>
@@ -163,17 +179,17 @@ export default function OnboardingFavoritesPage() {
               </h1>
 
               <p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--muted)] sm:text-base">
-                Add at least 1 favourite film. These picks will seed your first recommendations
-                and also appear in your Mount Rushmore.
+                Add at least 1 favourite film. These picks will seed your first
+                recommendations and also appear in your Mount Rushmore.
               </p>
             </div>
 
-            <div className="grid gap-2 min-[420px]:grid-cols-2 md:grid-cols-1 md:w-[260px]">
+            <div className="grid gap-2 min-[420px]:grid-cols-2 md:w-[260px] md:grid-cols-1">
               <button
+                type="button"
                 className="btn btn-primary"
                 onClick={continueOnboarding}
                 disabled={!hasAtLeastOne || busy}
-                type="button"
               >
                 {busy ? "Saving..." : "Continue to Recommendations"}
               </button>
@@ -209,6 +225,7 @@ export default function OnboardingFavoritesPage() {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Progress
             </p>
+
             <h2 className="mt-2 text-xl font-extrabold uppercase leading-[0.95] tracking-[-0.05em] text-[var(--foreground)] sm:text-2xl">
               Minimum required: 1 film
             </h2>
@@ -216,15 +233,16 @@ export default function OnboardingFavoritesPage() {
 
           <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-[1fr_auto] md:items-center">
             <p className="text-sm leading-7 text-[var(--foreground)]">
-              You have selected <span className="font-bold">{selected.length}</span> film
+              You have selected{" "}
+              <span className="font-bold">{selected.length}</span> film
               {selected.length === 1 ? "" : "s"}. Recommended: all 4.
             </p>
 
             <button
+              type="button"
               className="btn btn-primary md:w-auto"
               onClick={continueOnboarding}
               disabled={!hasAtLeastOne || busy}
-              type="button"
             >
               {busy ? "Saving..." : "Continue"}
             </button>

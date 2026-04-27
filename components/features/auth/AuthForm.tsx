@@ -1,10 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
+
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 type Mode = "login" | "signup";
+
+type AuthFormProps = {
+  mode: Mode;
+};
 
 function errMsg(err: unknown, fallback = "Something went wrong.") {
   if (err instanceof Error) return err.message;
@@ -12,8 +17,10 @@ function errMsg(err: unknown, fallback = "Something went wrong.") {
   return fallback;
 }
 
-export default function AuthForm({ mode }: { mode: Mode }) {
+export default function AuthForm({ mode }: AuthFormProps) {
   const isSignup = mode === "signup";
+
+  // Keep the Supabase browser client stable for the component lifecycle.
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const title = useMemo(
@@ -44,13 +51,19 @@ export default function AuthForm({ mode }: { mode: Mode }) {
       if (isSignup) {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+
         setMessage("Account created. Check your email if verification is enabled.");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
         if (error) throw error;
+
         window.location.href = "/dashboard";
       }
-    } catch (err) {
+    } catch (err: unknown) {
       setMessage(errMsg(err));
     } finally {
       setLoading(false);
@@ -63,14 +76,16 @@ export default function AuthForm({ mode }: { mode: Mode }) {
 
     try {
       const redirectTo = `${window.location.origin}/dashboard`;
+
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: redirectTo },
       });
 
       if (error) throw error;
+
       setMessage("Magic link sent. Check your email.");
-    } catch (err) {
+    } catch (err: unknown) {
       setMessage(errMsg(err, "Could not send magic link."));
     } finally {
       setLoading(false);
@@ -83,9 +98,11 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
           Feelix account
         </p>
+
         <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
           {title}
         </h1>
+
         <p className="mt-3 max-w-md text-sm leading-7 text-[var(--muted)]">
           {intro}
         </p>
@@ -96,6 +113,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
             Email
           </span>
+
           <input
             type="email"
             value={email}
@@ -110,6 +128,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
             Password
           </span>
+
           <input
             type="password"
             value={password}
@@ -121,15 +140,19 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         </label>
 
         <div className="grid gap-3 border-t-2 border-black pt-5">
-          <button disabled={loading} type="submit" className="btn btn-primary w-full">
+          <button
+            type="submit"
+            className="btn btn-primary w-full"
+            disabled={loading}
+          >
             {loading ? "Please wait..." : isSignup ? "Create account" : "Sign in"}
           </button>
 
           <button
-            disabled={loading || !email}
             type="button"
             onClick={sendMagicLink}
             className="btn btn-ghost w-full"
+            disabled={loading || !email}
           >
             {loading ? "Please wait..." : "Email magic link"}
           </button>
@@ -148,14 +171,20 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           {isSignup ? (
             <>
               Already have an account?{" "}
-              <Link href="/login" className="text-[var(--foreground)] underline-offset-4 hover:underline">
+              <Link
+                href="/login"
+                className="text-[var(--foreground)] underline-offset-4 hover:underline"
+              >
                 Sign in
               </Link>
             </>
           ) : (
             <>
               New to Feelix?{" "}
-              <Link href="/signup" className="text-[var(--foreground)] underline-offset-4 hover:underline">
+              <Link
+                href="/signup"
+                className="text-[var(--foreground)] underline-offset-4 hover:underline"
+              >
                 Create account
               </Link>
             </>

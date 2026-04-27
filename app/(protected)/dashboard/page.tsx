@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 export default function DashboardPage() {
+  // Keep a stable browser client instance for the page lifecycle.
   const supabase = useMemo(() => createSupabaseBrowser(), []);
+
   const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -16,9 +19,11 @@ export default function DashboardPage() {
       if (!alive) return;
 
       const userEmail = data.user?.email ?? null;
+
       setEmail(userEmail);
       setLoading(false);
 
+      // This page is intended for signed-in users only.
       if (!userEmail) {
         window.location.href = "/login";
       }
@@ -42,6 +47,7 @@ export default function DashboardPage() {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Dashboard
             </p>
+
             <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
               Loading
             </h1>
@@ -59,9 +65,11 @@ export default function DashboardPage() {
             <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
               Member dashboard
             </div>
+
             <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
               Library access
             </div>
+
             <div className="px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Account overview
             </div>
@@ -78,11 +86,15 @@ export default function DashboardPage() {
               </h1>
 
               <p className="mt-4 break-all text-sm leading-7 text-[var(--muted)] sm:text-base">
-                Signed in as <span className="font-bold text-[var(--foreground)]">{email}</span>
+                Signed in as{" "}
+                <span className="font-bold text-[var(--foreground)]">
+                  {email}
+                </span>
               </p>
 
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--foreground)] sm:text-base">
-                Use the dashboard as a quick route into your watchlist, favourites, profile, and recommendations.
+                Use the dashboard as a quick route into your watchlist,
+                favourites, profile, and recommendations.
               </p>
             </div>
 
@@ -99,11 +111,18 @@ export default function DashboardPage() {
                 Open Profile
               </Link>
 
-              <Link href="/recommendations" className="btn btn-ghost text-center">
+              <Link
+                href="/recommendations"
+                className="btn btn-ghost text-center"
+              >
                 Get Recommendations
               </Link>
 
-              <button onClick={logout} className="btn btn-ghost text-center md:col-span-1" type="button">
+              <button
+                type="button"
+                onClick={logout}
+                className="btn btn-ghost text-center md:col-span-1"
+              >
                 Sign Out
               </button>
             </div>

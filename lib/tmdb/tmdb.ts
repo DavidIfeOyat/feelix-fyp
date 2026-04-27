@@ -1,6 +1,7 @@
 const BASE = process.env.TMDB_BASE_URL || "https://api.themoviedb.org/3";
 
 export type Region = "GB" | "US";
+
 export type ProviderItem = {
   id: number;
   name: string;
@@ -55,19 +56,19 @@ export async function tmdb<T = any>(
     ...(READ_TOKEN ? {} : { api_key: API_KEY }),
   })}`;
 
-  const res = await fetch(url, {
+  const response = await fetch(url, {
     headers: READ_TOKEN ? { Authorization: `Bearer ${READ_TOKEN}` } : undefined,
     ...(options.revalidate === false
       ? { cache: "no-store" as const }
       : { next: { revalidate: options.revalidate ?? 60 } }),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`TMDB ${path} failed: ${res.status} ${text}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`TMDB ${path} failed: ${response.status} ${text}`);
   }
 
-  return res.json();
+  return response.json();
 }
 
 export function posterUrl(
@@ -90,7 +91,10 @@ export function getCinemaLink(title: string) {
   return `https://www.google.com/search?q=${encodeURIComponent(title)}+showtimes+near+me`;
 }
 
-export function getJustWatchSearchLink(title: string, currentRegion: Region = region) {
+export function getJustWatchSearchLink(
+  title: string,
+  currentRegion: Region = region
+) {
   return `https://www.justwatch.com/${currentRegion.toLowerCase()}/search?q=${encodeURIComponent(title)}`;
 }
 
@@ -106,7 +110,10 @@ export function pickTrailer(videos: any) {
   return trailer ? `https://www.youtube.com/embed/${trailer.key}` : null;
 }
 
-export function mapProviders(data: any, currentRegion: Region = region): ProviderGroups {
+export function mapProviders(
+  data: any,
+  currentRegion: Region = region
+): ProviderGroups {
   const entry = data?.results?.[currentRegion];
 
   if (!entry) {

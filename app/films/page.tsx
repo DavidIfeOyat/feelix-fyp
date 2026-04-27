@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+
 import FilmsExplorer from "@/components/features/films/FilmsExplorer";
 
 function FilmsExplorerFallback() {
@@ -9,6 +10,7 @@ function FilmsExplorerFallback() {
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
             Film explorer
           </p>
+
           <h1 className="mt-3 text-4xl font-extrabold uppercase leading-[0.9] tracking-[-0.08em] text-[var(--foreground)] sm:text-5xl md:text-6xl">
             Browse the collection.
           </h1>

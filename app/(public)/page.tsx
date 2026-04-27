@@ -1,12 +1,13 @@
-import { createSupabaseServerReadOnly } from "@/lib/supabase/server";
-import Hero from "@/components/home/Hero";
 import FilmShelf from "@/components/home/FilmShelf";
+import Hero from "@/components/home/Hero";
 import HomeFeatureGrid from "@/components/home/HomeFeatureGrid";
 import HomeFinalCTA from "@/components/home/HomeFinalCTA";
+import { createSupabaseServerReadOnly } from "@/lib/supabase/server";
 
 export default async function HomePage() {
   const supabase = await createSupabaseServerReadOnly();
   const { data } = await supabase.auth.getUser();
+
   const isAuthed = !!data.user;
 
   return (

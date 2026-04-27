@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 type TopFourSlots = (number | null)[];
+
+type TopFourMetaItem = {
+  tmdbId: number;
+  title: string;
+  poster: string | null;
+  backdrop: string | null;
+};
 
 export type ProfileHubData = {
   profile: {
@@ -25,7 +33,7 @@ export type ProfileHubData = {
   };
 
   topFour: TopFourSlots;
-  topFourMeta: Record<number, { tmdbId: number; title: string; poster: string | null; backdrop: string | null }>;
+  topFourMeta: Record<number, TopFourMetaItem>;
 
   loading: boolean;
   error: string | null;
@@ -39,15 +47,16 @@ function clampTopFour(ids: unknown[] | null | undefined): TopFourSlots {
   if (!Array.isArray(ids)) return out;
 
   for (let i = 0; i < 4; i++) {
-    const v = (ids as any[])[i];
-    const n = typeof v === "number" ? v : Number(v);
+    const value = ids[i];
+    const n = typeof value === "number" ? value : Number(value);
+
     out[i] = Number.isFinite(n) && n > 0 ? n : null;
   }
 
   return out;
 }
 
-async function fetchTmdbMini(tmdbId: number) {
+async function fetchTmdbMini(tmdbId: number): Promise<TopFourMetaItem | null> {
   if (!Number.isFinite(tmdbId) || tmdbId <= 0) return null;
 
   const res = await fetch(`/api/tmdb/movie/${tmdbId}`, { cache: "no-store" });
@@ -59,6 +68,7 @@ async function fetchTmdbMini(tmdbId: number) {
   }
 
   const json = await res.json();
+
   return {
     tmdbId,
     title: String(json.title ?? ""),
@@ -80,7 +90,7 @@ export function useProfileHub(userId?: string | null): ProfileHubData {
   });
 
   const [topFour, setTopFour] = useState<TopFourSlots>([null, null, null, null]);
-  const [topFourMeta, setTopFourMeta] = useState<ProfileHubData["topFourMeta"]>({});
+  const [topFourMeta, setTopFourMeta] = useState<Record<number, TopFourMetaItem>>({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,31 +104,53 @@ export function useProfileHub(userId?: string | null): ProfileHubData {
       setProfile(null);
       setTopFour([null, null, null, null]);
       setTopFourMeta({});
-      setCounts({ followers: 0, following: 0, filmsWatched: 0, watchlistCount: 0 });
+      setCounts({
+        followers: 0,
+        following: 0,
+        filmsWatched: 0,
+        watchlistCount: 0,
+      });
       setLoading(false);
       return;
     }
 
     try {
-      const { data: p, error: pErr } = await supabase
+      const { data: profileRow, error: profileError } = await supabase
         .from("profiles")
-        .select("user_id, display_name, username, bio, avatar_url, top_four_ids, mount_rushmore_public, watchlist_public")
+        .select(
+          "user_id, display_name, username, bio, avatar_url, top_four_ids, mount_rushmore_public, watchlist_public"
+        )
         .eq("user_id", userId)
         .single();
 
       if (myReq !== reqId.current) return;
-      if (pErr) throw pErr;
+      if (profileError) throw profileError;
 
-      setProfile(p as any);
+      setProfile(profileRow as any);
 
-      const four = clampTopFour((p as any)?.top_four_ids);
+      const four = clampTopFour((profileRow as any)?.top_four_ids);
       setTopFour(four);
 
       const [followersQ, followingQ, watchedCountQ, watchlistCountQ] = await Promise.all([
-        supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", userId),
-        supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", userId),
-        supabase.from("watched_items").select("external_id", { count: "exact", head: true }).eq("user_id", userId),
-        supabase.from("watchlist_items").select("external_id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase
+          .from("follows")
+          .select("*", { count: "exact", head: true })
+          .eq("following_id", userId),
+
+        supabase
+          .from("follows")
+          .select("*", { count: "exact", head: true })
+          .eq("follower_id", userId),
+
+        supabase
+          .from("watched_items")
+          .select("external_id", { count: "exact", head: true })
+          .eq("user_id", userId),
+
+        supabase
+          .from("watchlist_items")
+          .select("external_id", { count: "exact", head: true })
+          .eq("user_id", userId),
       ]);
 
       if (myReq !== reqId.current) return;
@@ -130,33 +162,42 @@ export function useProfileHub(userId?: string | null): ProfileHubData {
         watchlistCount: Number(watchlistCountQ.count ?? 0),
       });
 
-      const ids = four.filter((x): x is number => typeof x === "number" && x > 0);
-      const missing = ids.filter((id) => !topFourMeta[id]);
+      const ids = four.filter((value): value is number => typeof value === "number" && value > 0);
+      const missingIds = ids.filter((id) => !topFourMeta[id]);
 
-      if (missing.length) {
-        const minis = await Promise.all(missing.map(fetchTmdbMini));
+      if (missingIds.length > 0) {
+        const minis = await Promise.all(missingIds.map(fetchTmdbMini));
         if (myReq !== reqId.current) return;
 
         setTopFourMeta((prev) => {
           const next = { ...prev };
-          for (const m of minis) {
-            if (m?.tmdbId) next[m.tmdbId] = m;
+
+          for (const mini of minis) {
+            if (mini?.tmdbId) {
+              next[mini.tmdbId] = mini;
+            }
           }
+
           return next;
         });
       }
-    } catch (e: any) {
+    } catch (error: any) {
       if (myReq !== reqId.current) return;
-      setError(e?.message ? String(e.message) : "Failed to load profile.");
+      setError(error?.message ? String(error.message) : "Failed to load profile.");
     } finally {
-      if (myReq === reqId.current) setLoading(false);
+      if (myReq === reqId.current) {
+        setLoading(false);
+      }
     }
   }
 
   async function setTopFourSlot(slotIndex: number, tmdbId: number | null) {
     if (!userId) return;
 
-    const safeId = typeof tmdbId === "number" && Number.isFinite(tmdbId) && tmdbId > 0 ? tmdbId : null;
+    const safeId =
+      typeof tmdbId === "number" && Number.isFinite(tmdbId) && tmdbId > 0
+        ? tmdbId
+        : null;
 
     const next: TopFourSlots = [...topFour];
     next[slotIndex] = safeId;
@@ -168,16 +209,24 @@ export function useProfileHub(userId?: string | null): ProfileHubData {
       next[3] ?? null,
     ];
 
-    const payload = slotsToSave.every((x) => x === null) ? null : (slotsToSave as any);
+    const payload = slotsToSave.every((value) => value === null)
+      ? null
+      : (slotsToSave as any);
 
-    const { error: upErr } = await supabase.from("profiles").update({ top_four_ids: payload }).eq("user_id", userId);
-    if (upErr) throw upErr;
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ top_four_ids: payload })
+      .eq("user_id", userId);
+
+    if (updateError) throw updateError;
 
     setTopFour(slotsToSave);
 
     if (safeId) {
       const mini = await fetchTmdbMini(safeId);
-      if (mini) setTopFourMeta((prev) => ({ ...prev, [mini.tmdbId]: mini }));
+      if (mini) {
+        setTopFourMeta((prev) => ({ ...prev, [mini.tmdbId]: mini }));
+      }
     }
   }
 

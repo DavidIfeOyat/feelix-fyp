@@ -1,17 +1,27 @@
-﻿// proxy.ts
-import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+﻿// Route guard for protected pages and auth-entry pages.
+// This keeps session-aware redirects close to the edge of the app so that
+// users are sent to the right place before page rendering continues.
 
-const PROTECTED_PREFIXES = ["/films", "/watchlist", "/group", "/profile", "/dashboard"];
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+
+const PROTECTED_PREFIXES = [
+  "/films",
+  "/watchlist",
+  "/group",
+  "/profile",
+  "/dashboard",
+];
 
 export async function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
+  // API routes are handled separately and should not be redirected here.
   if (pathname.startsWith("/api")) {
     return NextResponse.next();
   }
 
-  let res = NextResponse.next();
+  let response = NextResponse.next();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,7 +33,7 @@ export async function proxy(req: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            res.cookies.set(name, value, options);
+            response.cookies.set(name, value, options);
           });
         },
       },
@@ -33,8 +43,12 @@ export async function proxy(req: NextRequest) {
   const { data } = await supabase.auth.getUser();
   const user = data.user;
 
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const isProtected = PROTECTED_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix)
+  );
+
+  const isAuthRoute =
+    pathname.startsWith("/login") || pathname.startsWith("/signup");
 
   if (!user && isProtected) {
     const url = req.nextUrl.clone();
@@ -49,7 +63,7 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return res;
+  return response;
 }
 
 export const config = {

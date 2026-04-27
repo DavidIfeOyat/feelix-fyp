@@ -11,13 +11,21 @@ type Film = {
   backdrop?: string | null;
 };
 
-type FilmsResponse = { items: Film[] };
+type FilmsResponse = {
+  items: Film[];
+};
+
+type HeroProps = {
+  isAuthed: boolean;
+};
 
 const fetcher = async (url: string): Promise<FilmsResponse> => {
   const response = await fetch(url, { cache: "no-store" });
+
   if (!response.ok) {
     throw new Error("Failed to load films");
   }
+
   return response.json() as Promise<FilmsResponse>;
 };
 
@@ -29,12 +37,12 @@ function getDayNumber(date = new Date()) {
   return Math.floor(date.getTime() / 86400000);
 }
 
-function pickDaily<T>(arr: T[], dayNumber: number) {
-  if (!arr.length) return null;
-  return arr[dayNumber % arr.length];
+function pickDaily<T>(items: T[], dayNumber: number) {
+  if (!items.length) return null;
+  return items[dayNumber % items.length];
 }
 
-export default function Hero({ isAuthed }: { isAuthed: boolean }) {
+export default function Hero({ isAuthed }: HeroProps) {
   const [dayKey, setDayKey] = useState(() => getDayKey());
 
   const { data } = useSWR<FilmsResponse>("/api/films?list=trending&limit=20", fetcher, {
@@ -142,7 +150,9 @@ export default function Hero({ isAuthed }: { isAuthed: boolean }) {
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-[var(--muted)]">Loading today’s featured title...</div>
+              <div className="text-sm text-[var(--muted)]">
+                Loading today’s featured title...
+              </div>
             )}
           </div>
         </div>

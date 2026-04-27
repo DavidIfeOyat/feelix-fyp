@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
+
 import type { MovieItem } from "@/components/shared/MovieCard";
 
-export default function PublicMovieCard({ item }: { item: MovieItem }) {
+type PublicMovieCardProps = {
+  item: MovieItem;
+};
+
+export default function PublicMovieCard({ item }: PublicMovieCardProps) {
   return (
     <article className="group overflow-hidden border-2 border-black bg-[var(--surface)]">
       <div className="bg-[var(--surface-strong)]">

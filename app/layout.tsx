@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { Archivo } from "next/font/google";
-import "./globals.css";
+
 import NavBar from "@/components/layout/NavBar";
+import "./globals.css";
 
 const archivo = Archivo({
   subsets: ["latin"],
@@ -9,10 +10,17 @@ const archivo = Archivo({
   display: "swap",
 });
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+type RootLayoutProps = {
+  children: ReactNode;
+};
+
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" className="bg-[var(--background)]">
-      <body className={`${archivo.className} bg-[var(--background)] text-[var(--foreground)] antialiased`}>
+      <body
+        className={`${archivo.className} bg-[var(--background)] text-[var(--foreground)] antialiased`}
+      >
+        {/* Basic skip link to keep top-level navigation accessible by keyboard. */}
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 border-2 border-black bg-[var(--background)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--foreground)]"

@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 
 type CreateUserBody = {
   email?: string;
@@ -13,6 +13,8 @@ function badRequest(error: string, status = 400) {
 
 export async function POST(req: Request) {
   try {
+    // This route exists only to support local/dev account creation workflows.
+    // It should never be available in production.
     if (process.env.NODE_ENV === "production") {
       return badRequest("Dev create-user route is disabled in production.", 403);
     }
@@ -54,6 +56,7 @@ export async function POST(req: Request) {
       },
     });
 
+    // Check profile-level username uniqueness before creating the auth user.
     const { data: existingProfile, error: usernameCheckError } = await admin
       .from("profiles")
       .select("user_id")
@@ -61,21 +64,25 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (usernameCheckError) {
-      return badRequest(`Username check failed: ${usernameCheckError.message}`, 500);
+      return badRequest(
+        `Username check failed: ${usernameCheckError.message}`,
+        500
+      );
     }
 
     if (existingProfile) {
       return badRequest("That username is already taken.", 409);
     }
 
-    const { data: createdUser, error: createUserError } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        username,
-      },
-    });
+    const { data: createdUser, error: createUserError } =
+      await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          username,
+        },
+      });
 
     if (createUserError) {
       return badRequest(`Auth creation failed: ${createUserError.message}`, 400);
@@ -108,7 +115,9 @@ export async function POST(req: Request) {
       username,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown server error";
+    const message =
+      error instanceof Error ? error.message : "Unknown server error";
+
     return badRequest(`Unexpected error: ${message}`, 500);
   }
 }

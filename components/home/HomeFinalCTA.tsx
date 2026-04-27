@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 
-export default function HomeFinalCTA({ isAuthed }: { isAuthed: boolean }) {
+type HomeFinalCTAProps = {
+  isAuthed: boolean;
+};
+
+export default function HomeFinalCTA({ isAuthed }: HomeFinalCTAProps) {
   const primaryHref = isAuthed ? "/recommendations" : "/signup";
   const secondaryHref = isAuthed ? "/profile" : "/login";
 

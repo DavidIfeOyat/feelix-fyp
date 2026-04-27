@@ -1,27 +1,36 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
 
-function parseCookieHeader(cookieHeader: string) {
+type ParsedCookie = {
+  name: string;
+  value: string;
+};
+
+function parseCookieHeader(cookieHeader: string): ParsedCookie[] {
   if (!cookieHeader) return [];
+
   return cookieHeader
     .split(";")
-    .map((c) => c.trim())
+    .map((cookie) => cookie.trim())
     .filter(Boolean)
-    .map((c) => {
-      const i = c.indexOf("=");
-      const name = i >= 0 ? c.slice(0, i) : c;
-      const value = i >= 0 ? c.slice(i + 1) : "";
+    .map((cookie) => {
+      const separatorIndex = cookie.indexOf("=");
+      const name = separatorIndex >= 0 ? cookie.slice(0, separatorIndex) : cookie;
+      const value = separatorIndex >= 0 ? cookie.slice(separatorIndex + 1) : "";
+
       return { name, value };
     });
 }
 
 /**
- * ✅ Server Components (NavBar, pages): SAFE (read-only, no cookie writes)
+ * Read-only Supabase client for Server Components.
+ * This is safe for pages and layouts that need session-aware reads
+ * but cannot write cookies back to the response.
  */
 export async function createSupabaseServerReadOnly() {
-  const h = await headers();
-  const cookieHeader = h.get("cookie") ?? "";
-  const all = parseCookieHeader(cookieHeader);
+  const requestHeaders = await headers();
+  const cookieHeader = requestHeaders.get("cookie") ?? "";
+  const parsedCookies = parseCookieHeader(cookieHeader);
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,10 +38,10 @@ export async function createSupabaseServerReadOnly() {
     {
       cookies: {
         getAll() {
-          return all;
+          return parsedCookies;
         },
         setAll() {
-          // no-op: Server Components cannot set cookies
+          // Server Components cannot write cookies, so this is intentionally a no-op.
         },
       },
     }
@@ -40,12 +49,13 @@ export async function createSupabaseServerReadOnly() {
 }
 
 /**
- * ✅ Server Actions / Route Handlers: ALLOWED to set cookies
+ * Writable Supabase client for Server Actions and Route Handlers.
+ * This version can persist refreshed auth cookies when the runtime allows it.
  */
 export async function createSupabaseServer() {
   const cookieStore: any = await cookies();
-  const h = await headers();
-  const cookieHeader = h.get("cookie") ?? "";
+  const requestHeaders = await headers();
+  const cookieHeader = requestHeaders.get("cookie") ?? "";
 
   const getAll = () =>
     typeof cookieStore.getAll === "function"
@@ -60,6 +70,7 @@ export async function createSupabaseServer() {
         getAll,
         setAll(cookiesToSet) {
           if (typeof cookieStore.set !== "function") return;
+
           cookiesToSet.forEach(({ name, value, options }: any) => {
             cookieStore.set(name, value, options);
           });

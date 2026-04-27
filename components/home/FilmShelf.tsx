@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
 import MovieCard, { type MovieItem } from "@/components/shared/MovieCard";
 
 type FilmsResponse = {
@@ -11,8 +12,20 @@ type FilmsResponse = {
   error?: string;
 };
 
-function ensureItemShape(it: unknown): MovieItem {
-  const film = it as Partial<MovieItem> & { title?: string; poster?: string };
+type FilmShelfProps = {
+  title: string;
+  subtitle?: string;
+  list: "trending" | "new";
+  browseHref: string;
+  isAuthed: boolean;
+};
+
+function ensureItemShape(item: unknown): MovieItem {
+  const film = item as Partial<MovieItem> & {
+    title?: string;
+    poster?: string;
+  };
+
   return {
     tmdbId: Number(film?.tmdbId ?? 0),
     title: String(film?.title ?? "Untitled"),
@@ -26,17 +39,15 @@ export default function FilmShelf({
   list,
   browseHref,
   isAuthed,
-}: {
-  title: string;
-  subtitle?: string;
-  list: "trending" | "new";
-  browseHref: string;
-  isAuthed: boolean;
-}) {
+}: FilmShelfProps) {
   const [data, setData] = useState<FilmsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const browseTarget = useMemo(() => `${browseHref}?list=${list}`, [browseHref, list]);
+  const browseTarget = useMemo(
+    () => `${browseHref}?list=${list}`,
+    [browseHref, list]
+  );
+
   const href = useMemo(
     () => (isAuthed ? browseTarget : `/login?from=${encodeURIComponent(browseTarget)}`),
     [isAuthed, browseTarget]
@@ -56,7 +67,6 @@ export default function FilmShelf({
         });
 
         const json = (await response.json()) as FilmsResponse;
-
         if (!alive) return;
 
         setData({
@@ -73,7 +83,9 @@ export default function FilmShelf({
           error: "Failed to load films.",
         });
       } finally {
-        if (alive) setLoading(false);
+        if (alive) {
+          setLoading(false);
+        }
       }
     }
 
@@ -133,7 +145,9 @@ export default function FilmShelf({
                 </div>
               </div>
             ))
-          : items.map((it) => <MovieCard key={it.tmdbId || it.title} item={it} />)}
+          : items.map((item) => (
+              <MovieCard key={item.tmdbId || item.title} item={item} />
+            ))}
       </div>
     </section>
   );

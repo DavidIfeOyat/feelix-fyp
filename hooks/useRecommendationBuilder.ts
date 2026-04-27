@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+
 import { useAuth } from "@/hooks/useAuth";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import * as recoConfig from "@/lib/reco/config";
 import type {
   Brainpower,
-  DealType,
   Darkness,
+  DealType,
   Energy,
   Intensity,
   Pace,
@@ -66,8 +67,12 @@ const QUICK_PRESETS: readonly QuickPreset[] = Array.isArray(recoConfig.QUICK_PRE
   : [];
 
 function friendlySaveError(message: string) {
-  const m = message.toLowerCase();
-  if (m.includes("duplicate key")) return "That film is already in your watchlist.";
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("duplicate key")) {
+    return "That film is already in your watchlist.";
+  }
+
   return message;
 }
 
@@ -195,6 +200,7 @@ export function useRecommendationBuilder() {
 
   function slidePresets(direction: "prev" | "next") {
     if (!railRef.current) return;
+
     const amount = direction === "next" ? 340 : -340;
     railRef.current.scrollBy({ left: amount, behavior: "smooth" });
   }
@@ -226,7 +232,9 @@ export function useRecommendationBuilder() {
 
   function toggleProvider(id: number) {
     clearPresetSelection();
-    setProviderIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setProviderIds((prev) =>
+      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
+    );
   }
 
   function setEnergyValue(value: Energy) {
@@ -283,7 +291,9 @@ export function useRecommendationBuilder() {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
 
-    if (!token) throw new Error("No session token");
+    if (!token) {
+      throw new Error("No session token");
+    }
 
     const res = await fetch("/api/recommendations", {
       method: "POST",
@@ -329,18 +339,22 @@ export function useRecommendationBuilder() {
         seed: seed ?? Date.now(),
       });
 
-      const got: RecoItem[] = Array.isArray(out?.items) ? (out.items as RecoItem[]) : [];
-      setItems(got);
+      const nextItems: RecoItem[] = Array.isArray(out?.items)
+        ? (out.items as RecoItem[])
+        : [];
+
+      setItems(nextItems);
       setStep(2);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Failed to fetch recommendation";
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch recommendation";
       setErr(message);
     } finally {
       setBusy(false);
     }
   }
 
-  async function addToWatchlist(it: RecoItem) {
+  async function addToWatchlist(item: RecoItem) {
     if (!user) return;
 
     setSaveMsg(null);
@@ -349,12 +363,12 @@ export function useRecommendationBuilder() {
     try {
       const { error } = await supabase.from("watchlist_items").insert({
         user_id: user.id,
-        external_id: String(it.tmdbId),
-        title: it.title,
-        poster: it.poster ?? "/placeholder.svg",
+        external_id: String(item.tmdbId),
+        title: item.title,
+        poster: item.poster ?? "/placeholder.svg",
         payload: {
-          tmdbId: it.tmdbId,
-          genreIds: it.genreIds ?? [],
+          tmdbId: item.tmdbId,
+          genreIds: item.genreIds ?? [],
           source: "recommendations",
           presetKey: selectedPresetKey,
           feelings,
@@ -363,17 +377,19 @@ export function useRecommendationBuilder() {
       });
 
       if (error) throw error;
-      setSaveMsg(`Added "${it.title}" to watchlist.`);
-    } catch (e: unknown) {
-      const raw = e instanceof Error ? e.message : "Failed to add to watchlist";
+
+      setSaveMsg(`Added "${item.title}" to watchlist.`);
+    } catch (error: unknown) {
+      const raw =
+        error instanceof Error ? error.message : "Failed to add to watchlist";
       setErr(friendlySaveError(raw));
     }
   }
 
-  function openSchedule(it: RecoItem) {
+  function openSchedule(item: RecoItem) {
     setErr(null);
     setSaveMsg(null);
-    setScheduleItem(it);
+    setScheduleItem(item);
     setScheduleOpen(true);
   }
 

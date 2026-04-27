@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
 import MovieCard, { type MovieItem } from "@/components/shared/MovieCard";
 import { useAuth } from "@/hooks/useAuth";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
@@ -11,7 +12,9 @@ type WatchedRow = {
   title: string | null;
   poster: string | null;
   watched_at: string | null;
-  payload: any;
+  payload: {
+    tmdbId?: number;
+  } | null;
 };
 
 const ITEMS_PER_PAGE = 40;
@@ -66,7 +69,7 @@ export default function WatchedHistoryPage() {
         })
         .filter(Boolean) as MovieItem[];
 
-      // Keeps the history view clean if duplicate rows exist.
+      // Keep the history grid clean if duplicate rows exist for the same film.
       const seen = new Set<number>();
       const unique: MovieItem[] = [];
 
@@ -79,14 +82,14 @@ export default function WatchedHistoryPage() {
       setItems(unique);
     }
 
-    run();
+    void run();
 
     return () => {
       alive = false;
     };
   }, [loading, user?.id, supabase]);
 
-  // Returns the user to page 1 whenever the dataset changes.
+  // Return to page 1 whenever the loaded dataset changes.
   useEffect(() => {
     setPage(1);
   }, [items?.length]);
@@ -97,6 +100,7 @@ export default function WatchedHistoryPage() {
 
   const pagedItems = useMemo(() => {
     if (!items) return [];
+
     const start = (safePage - 1) * ITEMS_PER_PAGE;
     return items.slice(start, start + ITEMS_PER_PAGE);
   }, [items, safePage]);
@@ -114,13 +118,19 @@ export default function WatchedHistoryPage() {
     return (
       <section className="container py-8 sm:py-10">
         <div className="card p-6 text-center sm:p-7">
-          <h1 className="text-2xl font-extrabold">Sign in to view Watch History</h1>
-          <p className="mt-2 text-[--color-muted]">This powers your recommendations.</p>
+          <h1 className="text-2xl font-extrabold">
+            Sign in to view Watch History
+          </h1>
+
+          <p className="mt-2 text-[--color-muted]">
+            This powers your recommendations.
+          </p>
 
           <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
             <Link className="btn btn-primary" href="/login?from=/watched-history">
               Sign in
             </Link>
+
             <Link className="btn btn-ghost" href="/signup">
               Create account
             </Link>
@@ -137,7 +147,10 @@ export default function WatchedHistoryPage() {
           <h1 className="text-2xl font-extrabold">Watched History</h1>
         </div>
 
-        <Link className="text-sm text-[--color-muted] hover:underline" href="/films">
+        <Link
+          href="/films"
+          className="text-sm text-[--color-muted] hover:underline"
+        >
           Browse films →
         </Link>
       </div>

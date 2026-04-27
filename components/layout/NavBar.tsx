@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useEffect, useMemo, useState } from "react";
+
 import { useAuth } from "@/hooks/useAuth";
+import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 function gate(userExists: boolean, href: string) {
   return userExists ? href : `/login?from=${encodeURIComponent(href)}`;
@@ -26,6 +27,7 @@ export default function NavBar() {
   const { user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+
   const supabase = useMemo(() => createSupabaseBrowser(), []);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -40,10 +42,12 @@ export default function NavBar() {
   const watchedHref = gate(isAuthed, "/watched-history");
   const profileHref = gate(isAuthed, "/profile");
 
+  // Close the mobile menu whenever the route changes.
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
+  // Lock background scrolling while the mobile navigation is open.
   useEffect(() => {
     if (!mobileOpen) return;
 
@@ -79,13 +83,18 @@ export default function NavBar() {
     <header className="sticky top-0 z-40 border-b-2 border-black bg-[var(--nav-bg)]/95 backdrop-blur-sm">
       <div className="container">
         <div className="flex min-h-[72px] items-center justify-between gap-4">
-          <Link href={homeHref} className="shrink-0 text-[var(--foreground)]" onClick={closeMenu}>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.28em]">
-              Feelix
-            </span>
+          <Link
+            href={homeHref}
+            className="shrink-0 text-[var(--foreground)]"
+            onClick={closeMenu}
+          >
             <span className="block text-[1.45rem] font-extrabold uppercase leading-none tracking-[-0.08em] sm:text-[1.6rem]">
-              FilmLibrary
+              FEELIX
             </span>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.28em]">
+              MOOD-BASED MOVIES
+            </span>
+            
           </Link>
 
           <div className="hidden min-w-0 flex-1 items-center justify-between gap-8 lg:flex">
@@ -132,7 +141,11 @@ export default function NavBar() {
                 <Link href={watchedHref} className={desktopLinkClass()}>
                   History
                 </Link>
-                <button type="button" className={desktopButtonClass()} onClick={logout}>
+                <button
+                  type="button"
+                  className={desktopButtonClass()}
+                  onClick={logout}
+                >
                   Sign Out
                 </button>
               </div>
@@ -196,6 +209,7 @@ export default function NavBar() {
                   <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                     Explore
                   </p>
+
                   <Link href={homeHref} className={mobileLinkClass()} onClick={closeMenu}>
                     Home
                   </Link>
@@ -217,19 +231,40 @@ export default function NavBar() {
                       <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                         Library
                       </p>
-                      <Link href={dashboardHref} className={mobileLinkClass()} onClick={closeMenu}>
+
+                      <Link
+                        href={dashboardHref}
+                        className={mobileLinkClass()}
+                        onClick={closeMenu}
+                      >
                         Dashboard
                       </Link>
-                      <Link href={watchlistHref} className={mobileLinkClass()} onClick={closeMenu}>
+                      <Link
+                        href={watchlistHref}
+                        className={mobileLinkClass()}
+                        onClick={closeMenu}
+                      >
                         Watchlist
                       </Link>
-                      <Link href={favoritesHref} className={mobileLinkClass()} onClick={closeMenu}>
+                      <Link
+                        href={favoritesHref}
+                        className={mobileLinkClass()}
+                        onClick={closeMenu}
+                      >
                         Favourites
                       </Link>
-                      <Link href={watchedHref} className={mobileLinkClass()} onClick={closeMenu}>
+                      <Link
+                        href={watchedHref}
+                        className={mobileLinkClass()}
+                        onClick={closeMenu}
+                      >
                         Watched History
                       </Link>
-                      <Link href={profileHref} className={mobileLinkClass()} onClick={closeMenu}>
+                      <Link
+                        href={profileHref}
+                        className={mobileLinkClass()}
+                        onClick={closeMenu}
+                      >
                         Profile
                       </Link>
                     </div>
@@ -238,6 +273,7 @@ export default function NavBar() {
                       <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                         Account
                       </p>
+
                       <button
                         type="button"
                         className={`${mobileLinkClass()} w-full text-left`}
@@ -252,6 +288,7 @@ export default function NavBar() {
                     <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                       Account
                     </p>
+
                     <Link href="/login" className={mobileLinkClass()} onClick={closeMenu}>
                       Sign In
                     </Link>

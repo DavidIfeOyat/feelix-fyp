@@ -1,7 +1,8 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { useEffect, useState } from "react";
+
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 type AuthState = {
@@ -26,13 +27,14 @@ export function useAuth(): AuthState {
       setLoading(false);
     }
 
-    loadUser();
+    void loadUser();
 
-    // Keep local auth state in sync with Supabase session changes.
+    // Keep the local auth state aligned with Supabase session changes.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
+
       setUser(session?.user ?? null);
       setLoading(false);
     });

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { tmdb, posterUrl } from "@/lib/tmdb/tmdb";
+import { NextResponse } from "next/server";
+
 import {
   findPresetDefinition,
   type Brainpower,
@@ -12,10 +12,19 @@ import {
   type Region,
   type WatchContext,
 } from "@/lib/reco/config";
+import { posterUrl, tmdb } from "@/lib/tmdb/tmdb";
 
+/**
+ * Recommendations are generated dynamically per request, so this route should
+ * always run on the server at request time.
+ */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Normalised recommendation input after the raw request body has been parsed.
+ * This keeps the rest of the route working with a predictable shape.
+ */
 type StructuredMoodInput = {
   feelings: string[];
   intentions: string[];
@@ -27,6 +36,9 @@ type StructuredMoodInput = {
   watchContext: WatchContext;
 };
 
+/**
+ * Shape returned to the frontend for each recommendation.
+ */
 type RecoItem = {
   tmdbId: number;
   title: string;
@@ -36,6 +48,9 @@ type RecoItem = {
   bestDeal: { provider: string; type: DealType; region: Region } | null;
 };
 
+/**
+ * Minimal provider row used when reading TMDb watch provider responses.
+ */
 type ProviderRow = {
   provider_name?: unknown;
   provider_id?: unknown;
@@ -52,6 +67,9 @@ type WatchProvidersResponse = {
   >;
 };
 
+/**
+ * Minimal movie shape used during discovery and scoring.
+ */
 type TMDbMovie = {
   id: number;
   title?: string;
@@ -69,6 +87,10 @@ type TMDbKeywordSearchResponse = {
   results?: Array<{ id?: number }>;
 };
 
+/**
+ * Saved row shapes pulled from Supabase. These are intentionally lightweight and
+ * only include the fields used by the route.
+ */
 type FavoriteRow = {
   external_id?: unknown;
   tmdb_id?: unknown;
@@ -98,6 +120,9 @@ type ProfileRow = {
   top_four_ids?: unknown;
 };
 
+/**
+ * Compact internal taste model built from persisted user behaviour.
+ */
 type UserTasteProfile = {
   watchedTmdbIds: Set<number>;
   savedTmdbIds: Set<number>;
@@ -108,6 +133,9 @@ type UserTasteProfile = {
   dislikedGenres: Map<number, number>;
 };
 
+/**
+ * Internal TMDb genre IDs used throughout the recommendation logic.
+ */
 const GENRES = {
   ACTION: 28,
   ADVENTURE: 12,
@@ -127,8 +155,15 @@ const GENRES = {
   WAR: 10752,
 } as const;
 
+/**
+ * Fallback genre set used if mood-derived signals are too weak.
+ */
 const DEFAULT_GENRES = [GENRES.DRAMA, GENRES.THRILLER, GENRES.COMEDY];
 
+/**
+ * Feeling-to-genre mapping.
+ * This translates emotional input into genre candidates.
+ */
 const FEELING_GENRES: Record<string, number[]> = {
   relaxed: [GENRES.COMEDY, GENRES.ROMANCE, GENRES.FAMILY],
   stressed: [GENRES.COMEDY, GENRES.DRAMA, GENRES.ROMANCE],
@@ -144,6 +179,10 @@ const FEELING_GENRES: Record<string, number[]> = {
   overwhelmed: [GENRES.COMEDY, GENRES.FAMILY, GENRES.FANTASY],
 };
 
+/**
+ * Feeling-to-keyword mapping.
+ * These hints are later converted into TMDb keyword IDs where possible.
+ */
 const FEELING_HINTS: Record<string, string[]> = {
   relaxed: ["feel good", "gentle", "warm"],
   stressed: ["comfort", "uplifting", "easy watch"],
@@ -159,18 +198,48 @@ const FEELING_HINTS: Record<string, string[]> = {
   overwhelmed: ["escapism", "comfort", "fantasy"],
 };
 
+/**
+ * Intention-to-genre mapping.
+ * Intentions usually carry slightly stronger weight than feelings because they
+ * reflect what the user actively wants from the watch.
+ */
 const INTENTION_GENRES: Record<string, number[]> = {
   "comfort me": [GENRES.COMEDY, GENRES.ROMANCE, GENRES.FAMILY, GENRES.DRAMA],
   "make me laugh": [GENRES.COMEDY, GENRES.FAMILY, GENRES.ADVENTURE],
-  "keep me hooked": [GENRES.THRILLER, GENRES.CRIME, GENRES.MYSTERY, GENRES.ACTION],
-  "make me think": [GENRES.DRAMA, GENRES.MYSTERY, GENRES.SCI_FI, GENRES.DOCUMENTARY],
-  "help me escape": [GENRES.ADVENTURE, GENRES.FANTASY, GENRES.SCI_FI, GENRES.COMEDY],
+  "keep me hooked": [
+    GENRES.THRILLER,
+    GENRES.CRIME,
+    GENRES.MYSTERY,
+    GENRES.ACTION,
+  ],
+  "make me think": [
+    GENRES.DRAMA,
+    GENRES.MYSTERY,
+    GENRES.SCI_FI,
+    GENRES.DOCUMENTARY,
+  ],
+  "help me escape": [
+    GENRES.ADVENTURE,
+    GENRES.FANTASY,
+    GENRES.SCI_FI,
+    GENRES.COMEDY,
+  ],
   "give me romance": [GENRES.ROMANCE, GENRES.COMEDY, GENRES.DRAMA],
-  "give me adrenaline": [GENRES.ACTION, GENRES.THRILLER, GENRES.CRIME, GENRES.ADVENTURE],
+  "give me adrenaline": [
+    GENRES.ACTION,
+    GENRES.THRILLER,
+    GENRES.CRIME,
+    GENRES.ADVENTURE,
+  ],
   "move me emotionally": [GENRES.DRAMA, GENRES.ROMANCE, GENRES.COMEDY],
   "mind-bending": [GENRES.SCI_FI, GENRES.MYSTERY, GENRES.THRILLER],
   heartwarming: [GENRES.FAMILY, GENRES.COMEDY, GENRES.DRAMA],
-  "dark and gripping": [GENRES.THRILLER, GENRES.CRIME, GENRES.HORROR, GENRES.MYSTERY],
+  "dark and gripping": [
+    GENRES.THRILLER,
+    GENRES.CRIME,
+    GENRES.HORROR,
+    GENRES.MYSTERY,
+  ],
 };
 
 const INTENTION_HINTS: Record<string, string[]> = {
@@ -187,6 +256,11 @@ const INTENTION_HINTS: Record<string, string[]> = {
   "dark and gripping": ["crime noir", "psychological", "dark"],
 };
 
+/**
+ * Refinement controls also contribute genre weight.
+ * These mappings let the route consider pace, darkness, context, and similar
+ * values without needing a separate recommendation model.
+ */
 const ENERGY_GENRES: Record<Energy, number[]> = {
   low: [GENRES.DRAMA, GENRES.COMEDY, GENRES.ROMANCE],
   medium: [GENRES.DRAMA, GENRES.MYSTERY, GENRES.COMEDY],
@@ -224,6 +298,9 @@ const CONTEXT_GENRES: Record<WatchContext, number[]> = {
   family: [GENRES.FAMILY, GENRES.ANIMATION, GENRES.COMEDY, GENRES.ADVENTURE],
 };
 
+/**
+ * Standard JSON response helper used across the route.
+ */
 function ok(data: unknown, status = 200) {
   return NextResponse.json(data, {
     status,
@@ -231,15 +308,23 @@ function ok(data: unknown, status = 200) {
   });
 }
 
+/**
+ * Extracts a Bearer token from the Authorization header.
+ */
 function bearer(req: Request) {
   const h = req.headers.get("authorization") || "";
   const m = h.match(/^Bearer\s+(.+)$/i);
   return m ? m[1] : null;
 }
 
+/**
+ * Create a Supabase client that acts on behalf of the authenticated user.
+ * This lets the route read user-specific data without exposing service-role access.
+ */
 function supabaseAuthed(accessToken: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const anon =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
   if (!url || !anon) throw new Error("Supabase env missing");
 
@@ -248,12 +333,15 @@ function supabaseAuthed(accessToken: string) {
   });
 }
 
-async function safeJson(req: Request): Promise<Record<string, unknown>> {
-  try {
-    return (await req.json()) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
+/**
+ * Parse the request body safely. If parsing fails, return an empty object
+ * instead of throwing before validation can run.
+ */
+function safeJson(req: Request): Promise<Record<string, unknown>> {
+  return req
+    .json()
+    .then((body) => body as Record<string, unknown>)
+    .catch(() => ({}));
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -266,10 +354,16 @@ function clampInt(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
+/**
+ * Lowercase, trim, and collapse spacing so matching stays consistent.
+ */
 function normalizeText(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/**
+ * Return unique integers from an unknown array-like value.
+ */
 function uniqInts(v: unknown, max: number) {
   const out: number[] = [];
   const seen = new Set<number>();
@@ -292,6 +386,9 @@ function uniqInts(v: unknown, max: number) {
   return out;
 }
 
+/**
+ * Return unique normalised strings up to the requested limit.
+ */
 function uniqStrings(values: string[], max: number) {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -317,17 +414,34 @@ function stringArray(v: unknown, max: number) {
   );
 }
 
-function parseEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+/**
+ * Safely parse an enum-like value from request input.
+ */
+function parseEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fallback: T
+): T {
   const normalized = normalizeText(String(value ?? ""));
   return allowed.find((item) => normalizeText(item) === normalized) ?? fallback;
 }
 
-function addWeightedGenres(target: Map<number, number>, genreIds: number[], weight: number) {
+/**
+ * Add weighted genre preference into a running score map.
+ */
+function addWeightedGenres(
+  target: Map<number, number>,
+  genreIds: number[],
+  weight: number
+) {
   for (const genreId of genreIds) {
     target.set(genreId, (target.get(genreId) ?? 0) + weight);
   }
 }
 
+/**
+ * Return the top N genres from a weighted score map.
+ */
 function topGenreIds(scores: Map<number, number>, limit: number) {
   return [...scores.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -335,6 +449,9 @@ function topGenreIds(scores: Map<number, number>, limit: number) {
     .slice(0, limit);
 }
 
+/**
+ * Build a flat keyword hint list from selected input keys.
+ */
 function keywordHintListFromMap(keys: string[], source: Record<string, string[]>) {
   const hints: string[] = [];
 
@@ -352,17 +469,24 @@ type ProviderEntry = {
   type: DealType;
 };
 
+/**
+ * Flatten provider groups for a region into a single list.
+ */
 function providerEntries(wp: WatchProvidersResponse, region: Region): ProviderEntry[] {
   const r = wp?.results?.[region];
   if (!r) return [];
 
-  const read = (rows: ProviderRow[] | undefined, type: DealType): ProviderEntry[] => {
+  const read = (
+    rows: ProviderRow[] | undefined,
+    type: DealType
+  ): ProviderEntry[] => {
     if (!Array.isArray(rows)) return [];
 
     return rows
       .map((row) => {
         const provider = String(row?.provider_name ?? "").trim();
         const providerId = Number(row?.provider_id);
+
         if (!provider || !Number.isFinite(providerId)) return null;
 
         return {
@@ -381,6 +505,9 @@ function providerEntries(wp: WatchProvidersResponse, region: Region): ProviderEn
   ];
 }
 
+/**
+ * Check whether the selected stream providers include a match for the film.
+ */
 function hasSelectedStreamProvider(
   wp: WatchProvidersResponse,
   region: Region,
@@ -394,6 +521,14 @@ function hasSelectedStreamProvider(
   );
 }
 
+/**
+ * Pick the most useful provider to show to the frontend.
+ * Preference order:
+ * 1. selected stream provider
+ * 2. selected provider of any type
+ * 3. first stream provider
+ * 4. first available provider
+ */
 function bestDeal(
   wp: WatchProvidersResponse,
   region: Region,
@@ -406,15 +541,13 @@ function bestDeal(
     preferredProviderIds.length > 0
       ? entries.find(
           (entry) =>
-            entry.type === "stream" && preferredProviderIds.includes(entry.providerId)
-        ) ??
-        entries.find((entry) => preferredProviderIds.includes(entry.providerId))
+            entry.type === "stream" &&
+            preferredProviderIds.includes(entry.providerId)
+        ) ?? entries.find((entry) => preferredProviderIds.includes(entry.providerId))
       : null;
 
   const chosen =
-    preferred ??
-    entries.find((entry) => entry.type === "stream") ??
-    entries[0];
+    preferred ?? entries.find((entry) => entry.type === "stream") ?? entries[0];
 
   return {
     provider: chosen.provider,
@@ -423,6 +556,9 @@ function bestDeal(
   };
 }
 
+/**
+ * Convert free-text keyword hints into TMDb keyword IDs.
+ */
 async function keywordIdsFromTmdb(text: string) {
   const q = normalizeText(text);
   if (!q) return [];
@@ -437,14 +573,23 @@ async function keywordIdsFromTmdb(text: string) {
   return uniqInts(ids, 5);
 }
 
+/**
+ * Resolve multiple keyword hints and merge them into one unique keyword ID list.
+ */
 async function keywordIdsFromHints(hints: string[]) {
   const uniqueHints = uniqStrings(hints, 5);
   if (!uniqueHints.length) return [];
 
-  const all = await Promise.all(uniqueHints.map((hint) => keywordIdsFromTmdb(hint)));
+  const all = await Promise.all(
+    uniqueHints.map((hint) => keywordIdsFromTmdb(hint))
+  );
+
   return uniqInts(all.flat(), 5);
 }
 
+/**
+ * Extract a TMDb ID from a saved row regardless of which column currently holds it.
+ */
 function extractTmdbId(row: {
   tmdb_id?: unknown;
   external_id?: unknown;
@@ -455,12 +600,19 @@ function extractTmdbId(row: {
   return Number.isFinite(id) ? id : null;
 }
 
+/**
+ * Pull stored genre IDs from a saved payload where available.
+ */
 function extractGenreIdsFromPayload(
   payload: FavoriteRow["payload"] | WatchlistRow["payload"]
 ) {
   return uniqInts(payload?.genreIds ?? payload?.genre_ids ?? [], 20);
 }
 
+/**
+ * Build a stable lookup key for feedback rows. This lets the route match rows
+ * whether the record is keyed by TMDb ID or by an external ID string.
+ */
 function feedbackKey(tmdbId: number | null, externalId: unknown) {
   const external = String(externalId ?? "").trim();
   if (tmdbId !== null) return `tmdb:${tmdbId}`;
@@ -468,6 +620,9 @@ function feedbackKey(tmdbId: number | null, externalId: unknown) {
   return null;
 }
 
+/**
+ * Fetch genre metadata for films that do not already have genre IDs saved locally.
+ */
 async function fetchGenresForMovieIds(ids: number[]) {
   const uniqueIds = [...new Set(ids)].slice(0, 12);
   const out = new Map<number, number[]>();
@@ -498,6 +653,9 @@ async function fetchGenresForMovieIds(ids: number[]) {
   return out;
 }
 
+/**
+ * Queue pending genre weights for films whose genres need to be looked up later.
+ */
 function queueGenreWeight(
   map: Map<number, { liked: number; disliked: number }>,
   tmdbId: number,
@@ -509,6 +667,11 @@ function queueGenreWeight(
   map.set(tmdbId, existing);
 }
 
+/**
+ * Build a lightweight taste profile from persisted user state.
+ * This route deliberately combines favourites, watchlist, explicit feedback,
+ * and top-four selections rather than relying on a single signal source.
+ */
 async function buildUserTasteProfile(
   supabase: SupabaseClient,
   userId: string
@@ -550,6 +713,10 @@ async function buildUserTasteProfile(
   const likedGenres = new Map<number, number>();
   const dislikedGenres = new Map<number, number>();
 
+  /**
+   * Normalise explicit feedback into a single map so later passes can check
+   * whether a favourite should really count as liked or disliked.
+   */
   const feedbackStateByKey = new Map<string, boolean>();
 
   for (const row of feedbackRows) {
@@ -563,8 +730,15 @@ async function buildUserTasteProfile(
     if (external) feedbackStateByKey.set(`ext:${external}`, Boolean(row.liked));
   }
 
+  /**
+   * For some saved rows, genre IDs may not exist in the local payload.
+   * These are queued and enriched later via TMDb.
+   */
   const queuedGenreWeights = new Map<number, { liked: number; disliked: number }>();
 
+  /**
+   * Watchlist items are treated as softer positive intent signals.
+   */
   for (const row of watchlistRows) {
     const tmdbId = extractTmdbId(row);
     if (tmdbId === null) continue;
@@ -579,11 +753,18 @@ async function buildUserTasteProfile(
     }
   }
 
+  /**
+   * Mount Rushmore selections are treated as very strong positive preference signals.
+   */
   for (const tmdbId of topFourIds) {
     likedTmdbIds.add(tmdbId);
     queueGenreWeight(queuedGenreWeights, tmdbId, "liked", 4.5);
   }
 
+  /**
+   * Favourites are stronger than watchlist items.
+   * If explicit feedback says a favourite was disliked, that override is respected.
+   */
   for (const row of favoriteRows) {
     const tmdbId = extractTmdbId(row);
     if (tmdbId === null) continue;
@@ -616,6 +797,9 @@ async function buildUserTasteProfile(
     }
   }
 
+  /**
+   * Explicit feedback is treated as the strongest behavioural signal.
+   */
   for (const row of feedbackRows) {
     const tmdbId = extractTmdbId(row);
     if (tmdbId === null) continue;
@@ -635,16 +819,27 @@ async function buildUserTasteProfile(
     }
   }
 
-  const lookedUpGenres = await fetchGenresForMovieIds([...queuedGenreWeights.keys()]);
+  /**
+   * Enrich queued film IDs with real TMDb genres when those genres were not
+   * already stored locally.
+   */
+  const lookedUpGenres = await fetchGenresForMovieIds([
+    ...queuedGenreWeights.keys(),
+  ]);
 
   for (const [tmdbId, weights] of queuedGenreWeights.entries()) {
     const genreIds = lookedUpGenres.get(tmdbId) ?? [];
     if (!genreIds.length) continue;
 
     if (weights.liked > 0) addWeightedGenres(likedGenres, genreIds, weights.liked);
-    if (weights.disliked > 0) addWeightedGenres(dislikedGenres, genreIds, weights.disliked);
+    if (weights.disliked > 0) {
+      addWeightedGenres(dislikedGenres, genreIds, weights.disliked);
+    }
   }
 
+  /**
+   * Saved or already-watched films are excluded from fresh recommendation results.
+   */
   const excludedTmdbIds = new Set<number>([...savedTmdbIds, ...watchedTmdbIds]);
 
   return {
@@ -658,6 +853,13 @@ async function buildUserTasteProfile(
   };
 }
 
+/**
+ * Score a candidate film against:
+ * - current mood / intent targets
+ * - historical liked genres
+ * - historical disliked genres
+ * - basic quality and popularity signals
+ */
 function scoreMatchAdvanced(
   movie: TMDbMovie,
   targetGenres: Map<number, number>,
@@ -708,6 +910,10 @@ function scoreMatchAdvanced(
   return clamp(Number(score.toFixed(2)), 0, 1);
 }
 
+/**
+ * Parse and normalise the incoming request body into the route's structured input.
+ * Presets can fill in missing values when the request does not specify them directly.
+ */
 function getStructuredInput(body: Record<string, unknown>): StructuredMoodInput {
   const feelings = stringArray(body.feelings, 3);
   const intentions = stringArray(body.intentions, 2);
@@ -734,19 +940,33 @@ function getStructuredInput(body: Record<string, unknown>): StructuredMoodInput 
   const preset = findPresetDefinition(presetKey);
 
   if (preset) {
-    if (input.feelings.length === 0) input.feelings = uniqStrings(preset.feelings, 3);
-    if (input.intentions.length === 0) input.intentions = uniqStrings(preset.intentions, 2);
+    if (input.feelings.length === 0) {
+      input.feelings = uniqStrings(preset.feelings, 3);
+    }
+    if (input.intentions.length === 0) {
+      input.intentions = uniqStrings(preset.intentions, 2);
+    }
     if (!String(body.energy ?? "").trim()) input.energy = preset.energy;
     if (!String(body.pace ?? "").trim()) input.pace = preset.pace;
     if (!String(body.intensity ?? "").trim()) input.intensity = preset.intensity;
     if (!String(body.darkness ?? "").trim()) input.darkness = preset.darkness;
-    if (!String(body.brainpower ?? "").trim()) input.brainpower = preset.brainpower;
-    if (!String(body.watchContext ?? "").trim()) input.watchContext = preset.watchContext;
+    if (!String(body.brainpower ?? "").trim()) {
+      input.brainpower = preset.brainpower;
+    }
+    if (!String(body.watchContext ?? "").trim()) {
+      input.watchContext = preset.watchContext;
+    }
   }
 
   return input;
 }
 
+/**
+ * Convert mood input into weighted recommendation signals:
+ * - genre scores
+ * - keyword hints
+ * - TMDb keyword IDs
+ */
 async function buildMoodSignals(input: StructuredMoodInput) {
   const genreScores = new Map<number, number>();
   const keywordHints: string[] = [];
@@ -769,6 +989,9 @@ async function buildMoodSignals(input: StructuredMoodInput) {
   addWeightedGenres(genreScores, BRAINPOWER_GENRES[input.brainpower], 1.05);
   addWeightedGenres(genreScores, CONTEXT_GENRES[input.watchContext], 1.05);
 
+  /**
+   * Add extra keyword hints from refinement controls.
+   */
   if (input.energy === "high") keywordHints.push("adrenaline", "fast-paced");
   if (input.energy === "low") keywordHints.push("comfort", "gentle");
   if (input.pace === "slow") keywordHints.push("slow burn");
@@ -798,6 +1021,10 @@ async function buildMoodSignals(input: StructuredMoodInput) {
   };
 }
 
+/**
+ * Discover candidate films from TMDb using progressively relaxed filters.
+ * This reduces empty-result cases when the initial query is too strict.
+ */
 async function discoverWithFallback(opts: {
   region: Region;
   maxRuntime: number;
@@ -808,10 +1035,21 @@ async function discoverWithFallback(opts: {
   keywords: number[];
   excluded: Set<number>;
 }) {
-  const { region, maxRuntime, ratingMin, ratingMax, providerIds, genres, keywords, excluded } =
-    opts;
+  const {
+    region,
+    maxRuntime,
+    ratingMin,
+    ratingMax,
+    providerIds,
+    genres,
+    keywords,
+    excluded,
+  } = opts;
 
-  const attempts: Array<{ name: string; params: Record<string, string | number | undefined> }> =
+  const attempts: Array<{
+    name: string;
+    params: Record<string, string | number | undefined>;
+  }> =
     providerIds.length > 0
       ? [
           {
@@ -956,6 +1194,9 @@ async function discoverWithFallback(opts: {
   };
 }
 
+/**
+ * Only return detailed debug metadata in development.
+ */
 function buildDebugPayload(
   enabled: boolean,
   payload: Record<string, unknown>
@@ -963,12 +1204,20 @@ function buildDebugPayload(
   return enabled ? payload : undefined;
 }
 
+/**
+ * Simple metadata endpoint for testing/documentation.
+ */
 export async function GET() {
   return ok({
     ok: true,
     endpoint: "recommendations",
     mode: "structured_mood_hybrid_rules",
-    tasteSources: ["favorites_items", "film_feedback", "watchlist_items", "profiles.top_four_ids"],
+    tasteSources: [
+      "favorites_items",
+      "film_feedback",
+      "watchlist_items",
+      "profiles.top_four_ids",
+    ],
     supports: {
       feelings: true,
       intentions: true,
@@ -978,8 +1227,14 @@ export async function GET() {
   });
 }
 
+/**
+ * Main recommendation endpoint.
+ */
 export async function POST(req: Request) {
   try {
+    /**
+     * 1. Authenticate the request.
+     */
     const token = bearer(req);
     if (!token) {
       return ok({ ok: false, error: "Missing Authorization Bearer token" }, 401);
@@ -992,12 +1247,16 @@ export async function POST(req: Request) {
       return ok({ ok: false, error: "Unauthorized" }, 401);
     }
 
+    /**
+     * 2. Parse and validate request input.
+     */
     const userId = me.user.id;
     const body = await safeJson(req);
 
     const structuredInput = getStructuredInput(body);
     const hasCoreInput =
-      structuredInput.feelings.length > 0 || structuredInput.intentions.length > 0;
+      structuredInput.feelings.length > 0 ||
+      structuredInput.intentions.length > 0;
 
     if (!hasCoreInput) {
       return ok(
@@ -1009,6 +1268,9 @@ export async function POST(req: Request) {
       );
     }
 
+    /**
+     * 3. Read filters and bounds from the request.
+     */
     const region: Region = body.region === "US" ? "US" : "GB";
     const requestedMaxRuntime = clampInt(Number(body.maxRuntime ?? 150), 60, 360);
     const effectiveMaxRuntime = clampInt(requestedMaxRuntime, 60, 360);
@@ -1020,9 +1282,16 @@ export async function POST(req: Request) {
 
     const providerIds = uniqInts(body.providerIds, 10);
 
+    /**
+     * 4. Build current mood signals and historical taste signals.
+     */
     const moodSignals = await buildMoodSignals(structuredInput);
     const taste = await buildUserTasteProfile(supabase, userId);
 
+    /**
+     * 5. Finalise target genres and keyword IDs.
+     * If mood signals are weak, blend in liked genres and fallback defaults.
+     */
     let genreIds = uniqInts(body.genreIds ?? moodSignals.genreIds, 5);
     if (genreIds.length < 3) {
       genreIds = uniqInts(
@@ -1033,11 +1302,17 @@ export async function POST(req: Request) {
 
     const keywordIds = uniqInts(body.keywordIds ?? moodSignals.keywordIds, 5);
 
+    /**
+     * 6. Build weighted genre targets used by the scoring stage.
+     */
     const targetGenreWeights = new Map<number, number>();
     for (const genreId of genreIds) {
       targetGenreWeights.set(genreId, moodSignals.genreScores.get(genreId) ?? 1);
     }
 
+    /**
+     * 7. Discover candidates from TMDb using fallback logic.
+     */
     const found = await discoverWithFallback({
       region,
       maxRuntime: effectiveMaxRuntime,
@@ -1049,6 +1324,9 @@ export async function POST(req: Request) {
       excluded: taste.excludedTmdbIds,
     });
 
+    /**
+     * 8. Attach debug details in development only.
+     */
     const debugPayload = buildDebugPayload(process.env.NODE_ENV === "development", {
       attempt: found.attempt,
       runtime: {
@@ -1085,6 +1363,10 @@ export async function POST(req: Request) {
       });
     }
 
+    /**
+     * 9. Score and rank candidates.
+     * Explicitly disliked items are removed before scoring.
+     */
     const scored = candidates
       .filter((m) => !taste.dislikedTmdbIds.has(Number(m.id)))
       .map((m: TMDbMovie) => ({
@@ -1093,8 +1375,15 @@ export async function POST(req: Request) {
       }))
       .sort((a, b) => b.match - a.match);
 
+    /**
+     * 10. Take the strongest initial pool for provider enrichment.
+     */
     const prelim = scored.slice(0, 12);
 
+    /**
+     * 11. Enrich each item with provider data and give a small score boost
+     * when the film matches the user's selected providers.
+     */
     const enriched = await Promise.all(
       prelim.map(async ({ m, match }) => {
         const item: RecoItem = {
@@ -1128,6 +1417,10 @@ export async function POST(req: Request) {
             finalMatch: clamp(match + providerBoost + streamBoost, 0, 1),
           };
         } catch {
+          /**
+           * Provider enrichment should not fail the whole request.
+           * Fall back to the original match score if provider lookup fails.
+           */
           return {
             ...item,
             providerMatched: providerIds.length === 0,
@@ -1137,11 +1430,17 @@ export async function POST(req: Request) {
       })
     );
 
+    /**
+     * 12. If provider filters were selected, keep only provider-matching items.
+     */
     const ranked =
       providerIds.length > 0
         ? enriched.filter((item) => item.providerMatched)
         : enriched;
 
+    /**
+     * 13. Return the final top four recommendations.
+     */
     const finalItems = ranked
       .sort((a, b) => b.finalMatch - a.finalMatch)
       .slice(0, 4)
@@ -1162,7 +1461,9 @@ export async function POST(req: Request) {
       ...(debugPayload ? { debug: debugPayload } : {}),
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Internal server error";
+    const message =
+      error instanceof Error ? error.message : "Internal server error";
+
     return ok({ ok: false, error: message }, 500);
   }
 }

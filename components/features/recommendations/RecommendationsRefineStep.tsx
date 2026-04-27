@@ -9,9 +9,20 @@ import type {
   WatchContext,
 } from "@/lib/reco/config";
 
-type Option<T extends string> = { value: T; label: string };
-type RuntimeOption = { value: number; label: string };
-type ProviderOption = { id: number; label: string };
+type Option<T extends string> = {
+  value: T;
+  label: string;
+};
+
+type RuntimeOption = {
+  value: number;
+  label: string;
+};
+
+type ProviderOption = {
+  id: number;
+  label: string;
+};
 
 export type RecommendationsRefineStepProps = {
   summary: string;
@@ -54,16 +65,16 @@ export type RecommendationsRefineStepProps = {
   onRecommend: () => void;
 };
 
-function selectChipClass(selected: boolean) {
-  return `select-chip ${selected ? "is-selected" : ""}`;
-}
-
 type ChoiceGroupProps<T extends string> = {
   title: string;
   value: T;
   options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
 };
+
+function selectChipClass(selected: boolean) {
+  return `select-chip ${selected ? "is-selected" : ""}`;
+}
 
 function Panel({
   eyebrow,
@@ -82,6 +93,7 @@ function Panel({
             {eyebrow}
           </p>
         ) : null}
+
         <h2 className="mt-2 text-xl font-extrabold uppercase leading-[0.95] tracking-[-0.05em] text-[var(--foreground)] sm:text-2xl">
           {title}
         </h2>
@@ -157,8 +169,6 @@ export function RecommendationsRefineStep({
   maxRating,
   setMinRatingValue,
   setMaxRatingValue,
-  surpriseMe,
-  setSurpriseMeValue,
   canRecommend,
   busy,
   onBack,
@@ -171,6 +181,7 @@ export function RecommendationsRefineStep({
           <p className="max-w-2xl text-sm leading-7 text-[var(--muted)]">
             Pick 1 intention to keep the recommendation focused.
           </p>
+
           <div className="shrink-0 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
             {intentions.length}/1
           </div>
@@ -217,6 +228,7 @@ export function RecommendationsRefineStep({
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Refine search
             </p>
+
             <h2 className="mt-2 text-xl font-extrabold uppercase leading-[0.95] tracking-[-0.05em] text-[var(--foreground)] sm:text-2xl">
               Adjust the details
             </h2>

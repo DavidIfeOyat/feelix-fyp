@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useEffect, useMemo, useState } from "react";
+
 import { useAuth } from "@/hooks/useAuth";
+import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 type AuthMsg = { type: "error" | "success"; text: string } | null;
 
@@ -12,6 +13,10 @@ type LoginPageClientProps = {
   created: boolean;
 };
 
+/**
+ * Maps Supabase/auth provider errors into short, user-facing messages.
+ * The goal here is to keep login feedback clear without exposing raw backend wording.
+ */
 function friendlyAuthError(message: string) {
   const m = message.toLowerCase();
 
@@ -35,16 +40,29 @@ export default function LoginPageClient({
   created,
 }: LoginPageClientProps) {
   const { user, loading } = useAuth();
+
+  // Keep the Supabase browser client stable for the lifetime of the component.
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
+  // Form state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // UI state
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // If the user has just come from sign-up, show a lightweight success prompt.
   const [msg, setMsg] = useState<AuthMsg>(
-    created ? { type: "success", text: "Account created. You can sign in now." } : null
+    created
+      ? { type: "success", text: "Account created. You can sign in now." }
+      : null
   );
 
+  /**
+   * If an authenticated user reaches this page, send them back to the intended route.
+   * This avoids leaving signed-in users stranded on the login screen.
+   */
   useEffect(() => {
     if (!loading && user) {
       window.location.replace(from);
@@ -53,13 +71,18 @@ export default function LoginPageClient({
 
   async function onLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
     setBusy(true);
     setMsg(null);
 
+    // Normalise the email before sending it to auth.
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !password) {
-      setMsg({ type: "error", text: "Enter both your email and password." });
+      setMsg({
+        type: "error",
+        text: "Enter both your email and password.",
+      });
       setBusy(false);
       return;
     }
@@ -72,10 +95,15 @@ export default function LoginPageClient({
 
       if (error) throw error;
 
+      // Use a hard navigation so auth/session state is fully refreshed after sign-in.
       window.location.assign(from);
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : "Login failed.";
-      setMsg({ type: "error", text: friendlyAuthError(raw) });
+
+      setMsg({
+        type: "error",
+        text: friendlyAuthError(raw),
+      });
     } finally {
       setBusy(false);
     }
@@ -85,7 +113,9 @@ export default function LoginPageClient({
     return (
       <section className="container py-10 sm:py-14">
         <div className="mx-auto max-w-md border-2 border-black bg-[var(--surface)]">
-          <div className="px-5 py-6 text-sm text-[var(--muted)]">Loading...</div>
+          <div className="px-5 py-6 text-sm text-[var(--muted)]">
+            Loading...
+          </div>
         </div>
       </section>
     );
@@ -94,21 +124,25 @@ export default function LoginPageClient({
   return (
     <section className="container py-10 sm:py-14">
       <div className="mx-auto max-w-md border-2 border-black bg-[var(--surface)]">
+        {/* Header */}
         <div className="border-b-2 border-black px-5 py-4 sm:px-6">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
             Feelix
           </p>
+
           <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)]">
             Sign In
           </h1>
         </div>
 
+        {/* Form content */}
         <div className="p-5 sm:p-6">
           <form onSubmit={onLogin} className="grid gap-5">
             <label className="grid gap-2">
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Email
               </span>
+
               <input
                 type="email"
                 autoComplete="email"
@@ -158,7 +192,11 @@ export default function LoginPageClient({
             ) : null}
 
             <div className="grid gap-3 pt-2">
-              <button className="btn btn-primary w-full" disabled={busy} type="submit">
+              <button
+                type="submit"
+                className="btn btn-primary w-full"
+                disabled={busy}
+              >
                 {busy ? "Signing in..." : "Sign in"}
               </button>
 
@@ -173,8 +211,8 @@ export default function LoginPageClient({
             <div className="border-t border-black pt-4 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
               Don’t have an account?{" "}
               <Link
-                className="text-[var(--foreground)] underline-offset-4 hover:underline"
                 href={`/signup?from=${encodeURIComponent(from)}`}
+                className="text-[var(--foreground)] underline-offset-4 hover:underline"
               >
                 Create one
               </Link>

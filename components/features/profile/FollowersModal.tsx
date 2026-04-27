@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { useEffect, useMemo, useState } from "react";
+
 import { Modal } from "@/components/shared/Modal";
 
 type MiniProfile = {
@@ -13,11 +14,21 @@ type MiniProfile = {
   bio: string | null;
 };
 
+type FollowersModalProps = {
+  open: boolean;
+  kind: "followers" | "following" | null;
+  onClose: () => void;
+  supabase: SupabaseClient;
+  userId: string | null;
+  onChanged: () => Promise<void> | void;
+  onNotify: (msg: string | null) => void;
+};
+
 const PUBLIC_PROFILE_BASE = "/u";
 
-function userHref(p: MiniProfile) {
-  const handle = (p.username || "").trim();
-  return `${PUBLIC_PROFILE_BASE}/${encodeURIComponent(handle || p.userId)}`;
+function userHref(profile: MiniProfile) {
+  const handle = (profile.username || "").trim();
+  return `${PUBLIC_PROFILE_BASE}/${encodeURIComponent(handle || profile.userId)}`;
 }
 
 function actionClass(primary: boolean) {
@@ -29,17 +40,15 @@ function actionClass(primary: boolean) {
   ].join(" ");
 }
 
-export function FollowersModal(props: {
-  open: boolean;
-  kind: "followers" | "following" | null;
-  onClose: () => void;
-  supabase: SupabaseClient;
-  userId: string | null;
-  onChanged: () => Promise<void> | void;
-  onNotify: (msg: string | null) => void;
-}) {
-  const { open, kind, onClose, supabase, userId, onChanged, onNotify } = props;
-
+export function FollowersModal({
+  open,
+  kind,
+  onClose,
+  supabase,
+  userId,
+  onChanged,
+  onNotify,
+}: FollowersModalProps) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [list, setList] = useState<MiniProfile[]>([]);
@@ -48,14 +57,15 @@ export function FollowersModal(props: {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
-    const f = filter.trim().toLowerCase();
-    if (!f) return list;
+    const q = filter.trim().toLowerCase();
+    if (!q) return list;
 
-    return list.filter((p) => {
-      const a = (p.displayName || "").toLowerCase();
-      const b = (p.username || "").toLowerCase();
-      const c = (p.bio || "").toLowerCase();
-      return a.includes(f) || b.includes(f) || c.includes(f);
+    return list.filter((profile) => {
+      const display = (profile.displayName || "").toLowerCase();
+      const username = (profile.username || "").toLowerCase();
+      const bio = (profile.bio || "").toLowerCase();
+
+      return display.includes(q) || username.includes(q) || bio.includes(q);
     });
   }, [filter, list]);
 
@@ -69,16 +79,16 @@ export function FollowersModal(props: {
       const idField = kind === "followers" ? "follower_id" : "following_id";
       const matchField = kind === "followers" ? "following_id" : "follower_id";
 
-      const { data: rel, error: relErr } = await supabase
+      const { data: relationships, error: relErr } = await supabase
         .from("follows")
-        .select(`${idField}`)
+        .select(idField)
         .eq(matchField, userId);
 
       if (relErr) throw relErr;
 
-      const ids = (rel ?? [])
-        .map((r: { [key: string]: unknown }) => String(r?.[idField] ?? ""))
-        .filter((x) => x.length > 0);
+      const ids = (relationships ?? [])
+        .map((row: Record<string, unknown>) => String(row?.[idField] ?? ""))
+        .filter((value) => value.length > 0);
 
       if (ids.length === 0) {
         setList([]);
@@ -86,26 +96,26 @@ export function FollowersModal(props: {
         return;
       }
 
-      const { data: profs, error: profErr } = await supabase
+      const { data: profiles, error: profErr } = await supabase
         .from("profiles")
         .select("user_id, username, display_name, avatar_url, bio")
         .in("user_id", ids);
 
       if (profErr) throw profErr;
 
-      const nextList: MiniProfile[] = (profs ?? []).map(
-        (p: {
+      const nextList: MiniProfile[] = (profiles ?? []).map(
+        (profile: {
           user_id: string;
           username?: string | null;
           display_name?: string | null;
           avatar_url?: string | null;
           bio?: string | null;
         }) => ({
-          userId: String(p.user_id),
-          username: p.username ?? null,
-          displayName: p.display_name ?? null,
-          avatarUrl: p.avatar_url ?? null,
-          bio: p.bio ?? null,
+          userId: String(profile.user_id),
+          username: profile.username ?? null,
+          displayName: profile.display_name ?? null,
+          avatarUrl: profile.avatar_url ?? null,
+          bio: profile.bio ?? null,
         })
       );
 
@@ -117,20 +127,20 @@ export function FollowersModal(props: {
 
       if (mineErr) throw mineErr;
 
-      const map: Record<string, boolean> = {};
-      (mine ?? []).forEach((r: { following_id?: string | null }) => {
-        const fid = String(r?.following_id ?? "");
-        if (fid) map[fid] = true;
+      const nextFollowMap: Record<string, boolean> = {};
+      (mine ?? []).forEach((row: { following_id?: string | null }) => {
+        const followingId = String(row?.following_id ?? "");
+        if (followingId) nextFollowMap[followingId] = true;
       });
 
       nextList.sort((a, b) => {
-        const an = (a.displayName || a.username || "").toLowerCase();
-        const bn = (b.displayName || b.username || "").toLowerCase();
-        return an.localeCompare(bn);
+        const aName = (a.displayName || a.username || "").toLowerCase();
+        const bName = (b.displayName || b.username || "").toLowerCase();
+        return aName.localeCompare(bName);
       });
 
       setList(nextList);
-      setFollowMap(map);
+      setFollowMap(nextFollowMap);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to load list.");
     } finally {
@@ -140,6 +150,7 @@ export function FollowersModal(props: {
 
   useEffect(() => {
     if (!open || !kind) return;
+
     setFilter("");
     void load();
   }, [open, kind, userId]);
@@ -157,10 +168,12 @@ export function FollowersModal(props: {
 
       if (error) throw error;
 
-      setFollowMap((m) => ({ ...m, [targetId]: true }));
+      setFollowMap((prev) => ({ ...prev, [targetId]: true }));
       await onChanged();
     } catch (e: unknown) {
-      onNotify(e instanceof Error ? `Follow failed: ${e.message}` : "Follow failed.");
+      onNotify(
+        e instanceof Error ? `Follow failed: ${e.message}` : "Follow failed."
+      );
     } finally {
       setBusyId(null);
     }
@@ -181,19 +194,21 @@ export function FollowersModal(props: {
 
       if (error) throw error;
 
-      setFollowMap((m) => {
-        const next = { ...m };
+      setFollowMap((prev) => {
+        const next = { ...prev };
         delete next[targetId];
         return next;
       });
 
       if (kind === "following") {
-        setList((lst) => lst.filter((p) => p.userId !== targetId));
+        setList((prev) => prev.filter((profile) => profile.userId !== targetId));
       }
 
       await onChanged();
     } catch (e: unknown) {
-      onNotify(e instanceof Error ? `Unfollow failed: ${e.message}` : "Unfollow failed.");
+      onNotify(
+        e instanceof Error ? `Unfollow failed: ${e.message}` : "Unfollow failed."
+      );
     } finally {
       setBusyId(null);
     }
@@ -219,7 +234,12 @@ export function FollowersModal(props: {
               onChange={(e) => setFilter(e.target.value)}
             />
 
-            <button className={actionClass(false)} onClick={() => void load()} disabled={loading}>
+            <button
+              className={actionClass(false)}
+              onClick={() => void load()}
+              disabled={loading}
+              type="button"
+            >
               {loading ? "Loading" : "Refresh"}
             </button>
           </div>
@@ -240,19 +260,19 @@ export function FollowersModal(props: {
             </div>
           ) : (
             <ul>
-              {filtered.map((p) => {
-                const isMe = p.userId === userId;
-                const youFollow = Boolean(followMap[p.userId]);
-                const busy = busyId === p.userId;
+              {filtered.map((profile) => {
+                const isMe = profile.userId === userId;
+                const youFollow = Boolean(followMap[profile.userId]);
+                const busy = busyId === profile.userId;
 
-                const primary = (p.displayName || p.username || "Member").trim();
-                const handle = p.username ? `@${p.username}` : "";
-                const subtitle = p.bio ? p.bio : handle;
+                const primary = (profile.displayName || profile.username || "Member").trim();
+                const handle = profile.username ? `@${profile.username}` : "";
+                const subtitle = profile.bio ? profile.bio : handle;
 
                 const action = isMe ? null : youFollow ? (
                   <button
                     className={actionClass(false)}
-                    onClick={() => void unfollow(p.userId)}
+                    onClick={() => void unfollow(profile.userId)}
                     disabled={busy}
                     title="Unfollow"
                     type="button"
@@ -262,7 +282,7 @@ export function FollowersModal(props: {
                 ) : (
                   <button
                     className={actionClass(true)}
-                    onClick={() => void follow(p.userId)}
+                    onClick={() => void follow(profile.userId)}
                     disabled={busy}
                     title={kind === "followers" ? "Follow back" : "Follow"}
                     type="button"
@@ -273,18 +293,22 @@ export function FollowersModal(props: {
 
                 return (
                   <li
-                    key={p.userId}
+                    key={profile.userId}
                     className="grid gap-4 border-b border-black px-4 py-4 last:border-b-0 sm:grid-cols-[1fr_auto] sm:items-center"
                   >
                     <Link
-                      href={userHref(p)}
+                      href={userHref(profile)}
                       className="grid min-w-0 grid-cols-[52px_1fr] gap-3 no-underline"
                       onClick={onClose}
                     >
                       <div className="h-13 w-13 border-2 border-black bg-[var(--surface-strong)]">
-                        {p.avatarUrl ? (
+                        {profile.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.avatarUrl} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={profile.avatarUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
                           <div className="grid h-full w-full place-items-center text-lg font-extrabold uppercase tracking-[-0.05em] text-[var(--foreground)]">
                             {primary.slice(0, 1).toUpperCase()}

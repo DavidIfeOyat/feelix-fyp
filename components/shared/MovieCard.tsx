@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useFilmLibrary } from "@/hooks/useFilmLibrary";
+
 import WatchedFeedbackModal from "@/components/movie/WatchedFeedbackModal";
+import { useFilmLibrary } from "@/hooks/useFilmLibrary";
 
 export type MovieItem = {
   tmdbId: number;
@@ -11,10 +12,14 @@ export type MovieItem = {
   poster: string;
 };
 
+type MovieCardProps = {
+  item: MovieItem;
+};
+
 const menuItemClass =
   "block w-full rounded-lg px-3 py-2 text-left hover:bg-white/10 disabled:opacity-50";
 
-export default function MovieCard({ item }: { item: MovieItem }) {
+export default function MovieCard({ item }: MovieCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -28,7 +33,10 @@ export default function MovieCard({ item }: { item: MovieItem }) {
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       if (!menuRef.current) return;
-      if (!menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+
+      if (!menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
     }
 
     document.addEventListener("mousedown", onDoc);

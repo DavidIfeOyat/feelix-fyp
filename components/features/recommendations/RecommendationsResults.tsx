@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useState } from "react";
+
 import type { RecoItem } from "@/hooks/useRecommendationBuilder";
 
 export type RecommendationsResultsProps = {
@@ -38,13 +39,17 @@ export function RecommendationsResults({
   const supportingItems = items.slice(1, 4);
 
   async function handleAddToWatchlist(item: RecoItem) {
-    if (addedIds.includes(item.tmdbId) || savingIds.includes(item.tmdbId)) return;
+    if (addedIds.includes(item.tmdbId) || savingIds.includes(item.tmdbId)) {
+      return;
+    }
 
     setSavingIds((prev) => [...prev, item.tmdbId]);
 
     try {
       await addToWatchlist(item);
-      setAddedIds((prev) => (prev.includes(item.tmdbId) ? prev : [...prev, item.tmdbId]));
+      setAddedIds((prev) =>
+        prev.includes(item.tmdbId) ? prev : [...prev, item.tmdbId]
+      );
     } catch (error) {
       console.error("Failed to add to watchlist:", error);
     } finally {
@@ -149,6 +154,7 @@ export function RecommendationsResults({
                 <div className="flex flex-wrap gap-2">
                   <InfoPill>Best Match</InfoPill>
                   <InfoPill>{Math.round(heroItem.match * 100)}% Match</InfoPill>
+
                   {heroItem.bestDeal?.provider ? (
                     <InfoPill>
                       {heroItem.bestDeal.type.toUpperCase()} • {heroItem.bestDeal.provider}
@@ -197,21 +203,22 @@ export function RecommendationsResults({
                 <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                   Alternatives
                 </p>
+
                 <h3 className="mt-2 text-2xl font-extrabold uppercase leading-[0.95] tracking-[-0.05em] text-[var(--foreground)] sm:text-3xl">
                   Other close matches
                 </h3>
               </div>
 
               <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-2 2xl:grid-cols-3">
-                {supportingItems.map((it) => (
+                {supportingItems.map((item) => (
                   <article
-                    key={`rec-${it.tmdbId}`}
+                    key={`rec-${item.tmdbId}`}
                     className="overflow-hidden border-2 border-black bg-[var(--surface-strong)]"
                   >
                     <div className="bg-[var(--surface)]">
                       <img
-                        src={it.poster ?? "/placeholder.svg"}
-                        alt={it.title}
+                        src={item.poster ?? "/placeholder.svg"}
+                        alt={item.title}
                         className="aspect-[2/3] w-full object-cover"
                       />
                     </div>
@@ -219,34 +226,35 @@ export function RecommendationsResults({
                     <div className="border-t-2 border-black p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <h4 className="min-w-0 flex-1 break-words text-lg font-extrabold uppercase leading-[0.95] tracking-[-0.05em] text-[var(--foreground)]">
-                          {it.title}
+                          {item.title}
                         </h4>
-                        <InfoPill>{Math.round(it.match * 100)}%</InfoPill>
+
+                        <InfoPill>{Math.round(item.match * 100)}%</InfoPill>
                       </div>
 
                       <p className="mt-3 text-xs leading-6 text-[var(--muted)]">
-                        {it.bestDeal?.provider
-                          ? `${it.bestDeal.type.toUpperCase()} • ${it.bestDeal.provider}`
+                        {item.bestDeal?.provider
+                          ? `${item.bestDeal.type.toUpperCase()} • ${item.bestDeal.provider}`
                           : "Providers unavailable"}
                       </p>
 
                       <div className="mt-4 grid gap-2">
-                        <Link className="btn btn-ghost text-center" href={`/films/${it.tmdbId}`}>
+                        <Link className="btn btn-ghost text-center" href={`/films/${item.tmdbId}`}>
                           Open Details
                         </Link>
 
                         <button
                           className="btn btn-primary"
-                          onClick={() => handleAddToWatchlist(it)}
-                          disabled={isWatchlistDisabled(it)}
+                          onClick={() => handleAddToWatchlist(item)}
+                          disabled={isWatchlistDisabled(item)}
                           type="button"
                         >
-                          {getWatchlistLabel(it)}
+                          {getWatchlistLabel(item)}
                         </button>
 
                         <button
                           className="btn btn-ghost"
-                          onClick={() => openSchedule(it)}
+                          onClick={() => openSchedule(item)}
                           type="button"
                         >
                           Schedule Watch

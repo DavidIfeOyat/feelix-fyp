@@ -2,21 +2,29 @@
 
 import { useState } from "react";
 
-export default function WatchedFeedbackModal(props: {
+type WatchedFeedbackModalProps = {
   open: boolean;
   title: string;
   onClose: () => void;
   onSubmit: (liked: boolean) => Promise<void>;
-}) {
+};
+
+export default function WatchedFeedbackModal({
+  open,
+  title,
+  onClose,
+  onSubmit,
+}: WatchedFeedbackModalProps) {
   const [busy, setBusy] = useState(false);
 
-  if (!props.open) return null;
+  if (!open) return null;
 
   async function submit(liked: boolean) {
     setBusy(true);
+
     try {
-      await props.onSubmit(liked);
-      props.onClose();
+      await onSubmit(liked);
+      onClose();
     } finally {
       setBusy(false);
     }
@@ -29,14 +37,14 @@ export default function WatchedFeedbackModal(props: {
           <div>
             <h2 className="font-bold">Quick feedback</h2>
             <p className="mt-1 text-sm text-[--color-muted]">
-              Did you like <span className="font-semibold text-white">{props.title}</span>?
+              Did you like <span className="font-semibold text-white">{title}</span>?
             </p>
           </div>
 
           <button
             className="btn btn-ghost"
             type="button"
-            onClick={props.onClose}
+            onClick={onClose}
             disabled={busy}
           >
             Skip

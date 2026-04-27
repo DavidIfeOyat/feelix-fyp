@@ -2,6 +2,13 @@
 
 import { useFilmLibrary } from "@/hooks/useFilmLibrary";
 
+type FilmLibraryActionsProps = {
+  tmdbId: number;
+  title: string;
+  poster: string;
+  className?: string;
+};
+
 function actionClass(active: boolean) {
   return [
     "inline-flex items-center justify-center border-2 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.16em] transition",
@@ -11,20 +18,20 @@ function actionClass(active: boolean) {
   ].join(" ");
 }
 
-export default function FilmLibraryActions(props: {
-  tmdbId: number;
-  title: string;
-  poster: string;
-  className?: string;
-}) {
+export default function FilmLibraryActions({
+  tmdbId,
+  title,
+  poster,
+  className,
+}: FilmLibraryActionsProps) {
   const lib = useFilmLibrary({
-    tmdbId: props.tmdbId,
-    title: props.title,
-    poster: props.poster,
+    tmdbId,
+    title,
+    poster,
   });
 
   return (
-    <div className={props.className ?? "flex flex-wrap gap-2"}>
+    <div className={className ?? "flex flex-wrap gap-2"}>
       <button
         type="button"
         onClick={lib.toggleWatchlist}

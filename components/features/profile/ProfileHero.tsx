@@ -2,43 +2,7 @@
 
 import Link from "next/link";
 
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="border-2 border-black bg-[var(--surface)] px-4 py-4">
-      <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] sm:text-[10px]">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)] md:text-3xl">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function StatButton(props: {
-  label: string;
-  value: string;
-  onClick: () => void;
-  title?: string;
-}) {
-  return (
-    <button
-      type="button"
-      className="border-2 border-black bg-[var(--surface)] px-4 py-4 text-left transition hover:bg-black hover:text-[var(--background)]"
-      onClick={props.onClick}
-      title={props.title}
-    >
-      <p className="text-[9px] font-bold uppercase tracking-[0.18em] opacity-70 sm:text-[10px]">
-        {props.label}
-      </p>
-      <p className="mt-2 text-2xl font-extrabold uppercase leading-none tracking-[-0.05em] md:text-3xl">
-        {props.value}
-      </p>
-    </button>
-  );
-}
-
-export function ProfileHero(props: {
+type ProfileHeroProps = {
   heroBackdrop: string | null;
   avatarUrl: string | null;
   resolvedName: string;
@@ -54,9 +18,61 @@ export function ProfileHero(props: {
   onOpenFollowers: () => void;
   onOpenFollowing: () => void;
   onOpenSettings: () => void;
-}) {
-  const { heroBackdrop, avatarUrl, resolvedName, resolvedUsername, resolvedBio, counts } = props;
+};
 
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-2 border-black bg-[var(--surface)] px-4 py-4">
+      <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] sm:text-[10px]">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)] md:text-3xl">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StatButton({
+  label,
+  value,
+  onClick,
+  title,
+}: {
+  label: string;
+  value: string;
+  onClick: () => void;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="border-2 border-black bg-[var(--surface)] px-4 py-4 text-left transition hover:bg-black hover:text-[var(--background)]"
+      onClick={onClick}
+      title={title}
+    >
+      <p className="text-[9px] font-bold uppercase tracking-[0.18em] opacity-70 sm:text-[10px]">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-extrabold uppercase leading-none tracking-[-0.05em] md:text-3xl">
+        {value}
+      </p>
+    </button>
+  );
+}
+
+export function ProfileHero({
+  heroBackdrop,
+  avatarUrl,
+  resolvedName,
+  resolvedUsername,
+  resolvedBio,
+  counts,
+  hubError,
+  onOpenFollowers,
+  onOpenFollowing,
+  onOpenSettings,
+}: ProfileHeroProps) {
   return (
     <section className="overflow-hidden border-2 border-black bg-[var(--surface)]">
       <div className="hidden border-b-2 border-black md:grid md:grid-cols-3">
@@ -136,7 +152,7 @@ export function ProfileHero(props: {
               <button
                 type="button"
                 className="btn btn-ghost text-center"
-                onClick={props.onOpenSettings}
+                onClick={onOpenSettings}
                 title="Settings"
               >
                 Settings
@@ -144,9 +160,9 @@ export function ProfileHero(props: {
             </div>
           </div>
 
-          {props.hubError ? (
+          {hubError ? (
             <div className="mt-4 border border-black bg-[var(--surface-strong)] px-4 py-3 text-sm text-[var(--foreground)] md:mt-5">
-              {props.hubError}
+              {hubError}
             </div>
           ) : null}
         </div>
@@ -156,6 +172,7 @@ export function ProfileHero(props: {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Profile stats
             </p>
+
             <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
               Social activity and library progress at a glance.
             </p>
@@ -165,14 +182,14 @@ export function ProfileHero(props: {
             <StatButton
               label="Followers"
               value={String(counts.followers)}
-              onClick={props.onOpenFollowers}
+              onClick={onOpenFollowers}
               title="View followers"
             />
 
             <StatButton
               label="Following"
               value={String(counts.following)}
-              onClick={props.onOpenFollowing}
+              onClick={onOpenFollowing}
               title="View following"
             />
 

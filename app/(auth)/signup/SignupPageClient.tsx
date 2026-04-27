@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useEffect, useMemo, useState } from "react";
+
 import { useAuth } from "@/hooks/useAuth";
+import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 type AuthMsg = { type: "error" | "success"; text: string } | null;
 
@@ -11,6 +12,10 @@ type SignupPageClientProps = {
   from: string;
 };
 
+/**
+ * Converts provider/backend auth messages into short user-facing feedback.
+ * The aim is to keep the response clear without exposing raw auth wording.
+ */
 function friendlySignupError(message: string) {
   const m = message.toLowerCase();
 
@@ -33,19 +38,30 @@ function isValidUsername(value: string) {
   return /^[a-zA-Z0-9_]{3,20}$/.test(value);
 }
 
-export default function SignupPageClient({ from }: SignupPageClientProps) {
+export default function SignupPageClient({
+  from,
+}: SignupPageClientProps) {
   const { user, loading } = useAuth();
+
+  // Keep the browser client stable for the life of this page.
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
+  // Form state
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  // UI state
   const [showPw, setShowPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<AuthMsg>(null);
 
+  /**
+   * Signed-in users should not stay on the sign-up page.
+   * Redirect them back to the intended destination as soon as auth resolves.
+   */
   useEffect(() => {
     if (!loading && user) {
       window.location.replace(from);
@@ -54,6 +70,7 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
 
   async function onSignup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
     setBusy(true);
     setMsg(null);
 
@@ -82,13 +99,20 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
     }
 
     if (password.length < 8) {
-      setMsg({ type: "error", text: "Password must be at least 8 characters." });
+      setMsg({
+        type: "error",
+        text: "Password must be at least 8 characters.",
+      });
       setBusy(false);
       return;
     }
 
     try {
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : "";
+
+      // After email confirmation, return the user to login and preserve
+      // the intended destination for the next sign-in step.
       const redirectTo = `${origin}/login?created=1&from=${encodeURIComponent(from)}`;
 
       const { data, error } = await supabase.auth.signUp({
@@ -104,6 +128,7 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
 
       if (error) throw error;
 
+      // Some auth configurations may return a live session immediately.
       if (data.session) {
         window.location.assign(from);
         return;
@@ -120,7 +145,11 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
       setConfirmPassword("");
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : "Sign up failed.";
-      setMsg({ type: "error", text: friendlySignupError(raw) });
+
+      setMsg({
+        type: "error",
+        text: friendlySignupError(raw),
+      });
     } finally {
       setBusy(false);
     }
@@ -130,7 +159,9 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
     return (
       <section className="container py-10 sm:py-14">
         <div className="mx-auto max-w-md border-2 border-black bg-[var(--surface)]">
-          <div className="px-5 py-6 text-sm text-[var(--muted)]">Loading...</div>
+          <div className="px-5 py-6 text-sm text-[var(--muted)]">
+            Loading...
+          </div>
         </div>
       </section>
     );
@@ -139,21 +170,25 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
   return (
     <section className="container py-10 sm:py-14">
       <div className="mx-auto max-w-md border-2 border-black bg-[var(--surface)]">
+        {/* Header */}
         <div className="border-b-2 border-black px-5 py-4 sm:px-6">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
             Feelix
           </p>
+
           <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)]">
             Create Account
           </h1>
         </div>
 
+        {/* Form content */}
         <div className="p-5 sm:p-6">
           <form onSubmit={onSignup} className="grid gap-5">
             <label className="grid gap-2">
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Username
               </span>
+
               <input
                 type="text"
                 autoComplete="username"
@@ -170,6 +205,7 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Email
               </span>
+
               <input
                 type="email"
                 autoComplete="email"
@@ -233,7 +269,9 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
                   type="button"
                   className="border-2 border-black px-4 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--foreground)] transition hover:bg-black hover:text-[var(--background)] disabled:opacity-50"
                   onClick={() => setShowConfirmPw((v) => !v)}
-                  aria-label={showConfirmPw ? "Hide password" : "Show password"}
+                  aria-label={
+                    showConfirmPw ? "Hide password" : "Show password"
+                  }
                   disabled={busy}
                 >
                   {showConfirmPw ? "Hide" : "Show"}
@@ -242,7 +280,8 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
             </label>
 
             <p className="text-[11px] leading-6 text-[var(--muted)]">
-              Usernames can use letters, numbers, and underscores. Passwords must be at least 8 characters.
+              Usernames can use letters, numbers, and underscores. Passwords
+              must be at least 8 characters.
             </p>
 
             {msg ? (
@@ -252,7 +291,11 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
             ) : null}
 
             <div className="grid gap-3 pt-2">
-              <button className="btn btn-primary w-full" disabled={busy} type="submit">
+              <button
+                type="submit"
+                className="btn btn-primary w-full"
+                disabled={busy}
+              >
                 {busy ? "Creating account..." : "Create account"}
               </button>
 
@@ -267,8 +310,8 @@ export default function SignupPageClient({ from }: SignupPageClientProps) {
             <div className="border-t border-black pt-4 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
               Already have an account?{" "}
               <Link
-                className="text-[var(--foreground)] underline-offset-4 hover:underline"
                 href={`/login?from=${encodeURIComponent(from)}`}
+                className="text-[var(--foreground)] underline-offset-4 hover:underline"
               >
                 Sign in
               </Link>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import { Modal } from "@/components/shared/Modal";
 
 type SearchItem = {
@@ -19,6 +20,13 @@ type TopFourMeta = {
   backdrop?: string | null;
 };
 
+type MountRushmoreSectionProps = {
+  topFour: Array<number | null>;
+  topFourMeta: Record<number, TopFourMeta | undefined>;
+  setTopFourSlot: (slotIndex: number, tmdbId: number | null) => Promise<void>;
+  onNotify: (msg: string | null) => void;
+};
+
 function normalizeMovieOnly(items: SearchItem[]) {
   return items.filter((item) => {
     const id = Number(item.tmdbId);
@@ -26,18 +34,17 @@ function normalizeMovieOnly(items: SearchItem[]) {
 
     const mediaType = (item.mediaType ?? item.media_type ?? "").toLowerCase();
     if (!mediaType) return true;
+
     return mediaType === "movie";
   });
 }
 
-export function MountRushmoreSection(props: {
-  topFour: Array<number | null>;
-  topFourMeta: Record<number, TopFourMeta | undefined>;
-  setTopFourSlot: (slotIndex: number, tmdbId: number | null) => Promise<void>;
-  onNotify: (msg: string | null) => void;
-}) {
-  const { topFour, topFourMeta, setTopFourSlot, onNotify } = props;
-
+export function MountRushmoreSection({
+  topFour,
+  topFourMeta,
+  setTopFourSlot,
+  onNotify,
+}: MountRushmoreSectionProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSlot, setPickerSlot] = useState(0);
 
@@ -76,6 +83,7 @@ export function MountRushmoreSection(props: {
 
         const json = await res.json();
         const items = Array.isArray(json?.results) ? (json.results as SearchItem[]) : [];
+
         setResults(normalizeMovieOnly(items));
         setActiveIdx(0);
       } catch {
@@ -139,6 +147,7 @@ export function MountRushmoreSection(props: {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Mount Rushmore
             </p>
+
             <h2 className="mt-3 text-2xl font-extrabold uppercase leading-[0.95] tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
               Four films that define your taste.
             </h2>
@@ -268,6 +277,7 @@ export function MountRushmoreSection(props: {
                     e.preventDefault();
                     const picked = results[activeIdx];
                     const tmdbId = Number(picked?.tmdbId);
+
                     if (Number.isFinite(tmdbId)) {
                       void selectMovie(tmdbId);
                     }

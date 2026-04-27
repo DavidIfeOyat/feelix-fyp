@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+
 import { useAuth } from "@/hooks/useAuth";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
@@ -15,10 +16,16 @@ type Person = {
   watchlist_public: boolean | null;
 };
 
+type FollowRow = {
+  following_id: string;
+};
+
 export default function PeoplePage() {
   const { user, loading } = useAuth();
-  const supabase = useMemo(() => createSupabaseBrowser(), []);
   const router = useRouter();
+
+  // Stable client instance for profile search and follow actions.
+  const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [q, setQ] = useState("");
   const [suggestions, setSuggestions] = useState<Person[]>([]);
@@ -32,8 +39,11 @@ export default function PeoplePage() {
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       if (!boxRef.current) return;
-      if (!boxRef.current.contains(e.target as Node)) setOpen(false);
+      if (!boxRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     }
+
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
@@ -68,7 +78,10 @@ export default function PeoplePage() {
         return;
       }
 
-      const list = (p ?? []).filter((x: any) => x.user_id !== user.id) as Person[];
+      const list = (p ?? []).filter(
+        (x: Person) => x.user_id !== user.id
+      ) as Person[];
+
       setSuggestions(list);
 
       const ids = list.map((x) => x.user_id);
@@ -85,22 +98,25 @@ export default function PeoplePage() {
 
       if (!alive) return;
 
-      setFollowingSet(new Set((f ?? []).map((r: any) => String(r.following_id))));
+      setFollowingSet(
+        new Set((f ?? []).map((r: FollowRow) => String(r.following_id)))
+      );
     }
 
-    const t = setTimeout(run, 250); // debounce
+    const t = setTimeout(run, 250); // lightweight debounce for search
     return () => {
       alive = false;
       clearTimeout(t);
     };
   }, [q, user?.id, supabase, user]);
 
-  function profileHref(p: Person) {
-    return `/u/${encodeURIComponent(p.username ?? p.user_id)}`;
+  function profileHref(person: Person) {
+    return `/u/${encodeURIComponent(person.username ?? person.user_id)}`;
   }
 
   async function toggleFollow(targetId: string) {
     if (!user) return;
+
     setBusyId(targetId);
     setErr(null);
 
@@ -127,7 +143,10 @@ export default function PeoplePage() {
           following_id: targetId,
         });
 
-        if (error && (error as any).code !== "23505") throw error;
+        // Ignore duplicate follow attempts if the relation already exists.
+        if (error && (error as { code?: string }).code !== "23505") {
+          throw error;
+        }
 
         setFollowingSet((prev) => {
           const next = new Set(prev);
@@ -135,24 +154,28 @@ export default function PeoplePage() {
           return next;
         });
       }
-    } catch (e: any) {
-      setErr(e?.message ? String(e.message) : "Follow failed.");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Follow failed.");
     } finally {
       setBusyId(null);
     }
   }
 
-  if (loading) return <p className="container py-10">Loading…</p>;
+  if (loading) {
+    return <p className="container py-10">Loading…</p>;
+  }
 
   if (!user) {
     return (
-      <section className="container py-10 max-w-xl">
+      <section className="container max-w-xl py-10">
         <div className="card p-7 text-center">
           <h1 className="text-2xl font-extrabold">Sign in to find people</h1>
+
           <div className="mt-5 flex justify-center gap-2">
             <Link className="btn btn-primary" href="/login?from=/people">
               Sign in
             </Link>
+
             <Link className="btn btn-ghost" href="/signup">
               Create account
             </Link>
@@ -167,14 +190,20 @@ export default function PeoplePage() {
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold">Find people</h1>
-          <p className="text-sm text-[--color-muted]">Type a username or name.</p>
+          <p className="text-sm text-[--color-muted]">
+            Type a username or name.
+          </p>
         </div>
-        <Link href="/profile" className="text-sm text-[--color-muted] hover:underline">
+
+        <Link
+          href="/profile"
+          className="text-sm text-[--color-muted] hover:underline"
+        >
           Back to profile →
         </Link>
       </div>
 
-      <div className="mt-5 relative" ref={boxRef}>
+      <div className="relative mt-5" ref={boxRef}>
         <input
           className="input w-full"
           value={q}
@@ -186,70 +215,93 @@ export default function PeoplePage() {
           placeholder="Search @username or display name…"
         />
 
-        {open && q.trim() && (
-          <div className="absolute z-50 mt-2 w-full surface rounded-[--radius-xl] border border-white/10 overflow-hidden">
-            {err && <div className="p-3 text-sm text-red-200">⚠️ {err}</div>}
+        {open && q.trim() ? (
+          <div className="surface absolute z-50 mt-2 w-full overflow-hidden rounded-[--radius-xl] border border-white/10">
+            {err ? (
+              <div className="p-3 text-sm text-red-200">⚠️ {err}</div>
+            ) : null}
 
             {suggestions.length === 0 && !err ? (
-              <div className="p-3 text-sm text-[--color-muted]">No matches.</div>
+              <div className="p-3 text-sm text-[--color-muted]">
+                No matches.
+              </div>
             ) : (
-              suggestions.map((p) => {
-                const handle = p.username ? `@${p.username}` : p.user_id.slice(0, 8);
-                const isFollowing = followingSet.has(p.user_id);
+              suggestions.map((person) => {
+                const handle = person.username
+                  ? `@${person.username}`
+                  : person.user_id.slice(0, 8);
+
+                const isFollowing = followingSet.has(person.user_id);
 
                 return (
                   <div
-                    key={p.user_id}
-                    className="w-full flex items-center justify-between gap-3 p-3 hover:bg-white/10 text-left"
-                    >
+                    key={person.user_id}
+                    className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-white/10"
+                  >
                     <button
                       type="button"
-                      className="flex items-center gap-3 min-w-0 text-left"
+                      className="flex min-w-0 items-center gap-3 text-left"
                       onClick={() => {
                         setOpen(false);
-                        router.push(profileHref(p));
+                        router.push(profileHref(person));
                       }}
                     >
-                      <div className="h-10 w-10 rounded-full overflow-hidden bg-white/10 ring-1 ring-white/10 shrink-0">
-                        {p.avatar_url ? (
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
+                        {person.avatar_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.avatar_url} alt="avatar" className="h-full w-full object-cover" />
+                          <img
+                            src={person.avatar_url}
+                            alt="avatar"
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
-                          <div className="h-full w-full grid place-items-center text-white/80 font-semibold">
-                            {(p.display_name ?? "U").slice(0, 1).toUpperCase()}
+                          <div className="grid h-full w-full place-items-center font-semibold text-white/80">
+                            {(person.display_name ?? "U")
+                              .slice(0, 1)
+                              .toUpperCase()}
                           </div>
                         )}
                       </div>
 
                       <div className="min-w-0">
-                        <div className="font-semibold truncate">
-                          {p.display_name}{" "}
-                          <span className="text-[--color-muted] font-normal">
-                            {p.username ? `@${p.username}` : p.user_id.slice(0, 8)}
+                        <div className="truncate font-semibold">
+                          {person.display_name}{" "}
+                          <span className="font-normal text-[--color-muted]">
+                            {handle}
                           </span>
                         </div>
-                        <div className="text-xs text-[--color-muted] truncate">{p.bio ?? ""}</div>
+
+                        <div className="truncate text-xs text-[--color-muted]">
+                          {person.bio ?? ""}
+                        </div>
                       </div>
                     </button>
 
                     <button
                       type="button"
-                      className={`btn ${isFollowing ? "btn-ghost" : "btn-primary"}`}
-                      disabled={busyId === p.user_id}
-                      onClick={() => toggleFollow(p.user_id)}
+                      className={`btn ${
+                        isFollowing ? "btn-ghost" : "btn-primary"
+                      }`}
+                      disabled={busyId === person.user_id}
+                      onClick={() => toggleFollow(person.user_id)}
                     >
-                      {busyId === p.user_id ? "…" : isFollowing ? "Following" : "Follow"}
+                      {busyId === person.user_id
+                        ? "…"
+                        : isFollowing
+                        ? "Following"
+                        : "Follow"}
                     </button>
                   </div>
                 );
               })
             )}
           </div>
-        )}
+        ) : null}
       </div>
 
       <p className="mt-3 text-xs text-[--color-muted]">
-        Tip: press enter after typing to open the first result (click a suggestion).
+        Tip: press enter after typing to open the first result (click a
+        suggestion).
       </p>
     </section>
   );

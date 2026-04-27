@@ -1,18 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+
 import { useAuth } from "@/hooks/useAuth";
+import { createSupabaseBrowser } from "@/lib/supabase/client";
+
+type PostLoginOnboardingGateProps = {
+  children: React.ReactNode;
+};
+
+type WatchedFeedbackRow = {
+  reaction?: unknown;
+  payload?: {
+    reaction?: unknown;
+  } | null;
+};
+
+type ProfileTopFourRow = {
+  top_four_ids?: unknown;
+};
 
 export function PostLoginOnboardingGate({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+}: PostLoginOnboardingGateProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Stable client instance for onboarding checks.
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [checking, setChecking] = useState(true);
@@ -29,6 +45,7 @@ export function PostLoginOnboardingGate({
         return;
       }
 
+      // Avoid redirecting away from the onboarding flow itself.
       if (pathname?.startsWith("/onboarding/favourites")) {
         if (!cancelled) setChecking(false);
         return;
@@ -61,20 +78,23 @@ export function PostLoginOnboardingGate({
         const favoriteCount = favRes.count ?? 0;
 
         const hasWatchedFeedback = Array.isArray(watchedRes.data)
-          ? watchedRes.data.some((row: any) => {
+          ? watchedRes.data.some((row: WatchedFeedbackRow) => {
               const reaction = String(
                 row?.reaction ?? row?.payload?.reaction ?? ""
               ).toLowerCase();
+
               return reaction === "like" || reaction === "dislike";
             })
           : false;
 
-        const topFourIds = Array.isArray((profileRes.data as any)?.top_four_ids)
-          ? ((profileRes.data as any).top_four_ids as unknown[])
+        const profileData = (profileRes.data ?? null) as ProfileTopFourRow | null;
+
+        const topFourIds = Array.isArray(profileData?.top_four_ids)
+          ? (profileData.top_four_ids as unknown[])
           : [];
 
-        const hasMountRushmorePick = topFourIds.some((x) => {
-          const n = Number(x);
+        const hasMountRushmorePick = topFourIds.some((value) => {
+          const n = Number(value);
           return Number.isFinite(n) && n > 0;
         });
 

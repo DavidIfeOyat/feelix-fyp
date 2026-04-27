@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
 import MovieCard, { type MovieItem } from "@/components/shared/MovieCard";
 import { useAuth } from "@/hooks/useAuth";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 const ITEMS_PER_PAGE = 40;
+
+type WatchlistRow = {
+  external_id?: unknown;
+  title?: unknown;
+  poster?: unknown;
+  payload?: {
+    tmdbId?: unknown;
+  } | null;
+};
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -14,6 +24,8 @@ function clamp(n: number, min: number, max: number) {
 
 export default function WatchlistPage() {
   const { user, loading } = useAuth();
+
+  // Keep a stable client instance for watchlist reads.
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [items, setItems] = useState<MovieItem[] | null>(null);
@@ -49,7 +61,7 @@ export default function WatchlistPage() {
       }
 
       const mapped: MovieItem[] = (data ?? [])
-        .map((row: any) => {
+        .map((row: WatchlistRow) => {
           const tmdbId = Number(row?.payload?.tmdbId ?? row?.external_id);
           if (!Number.isFinite(tmdbId)) return null;
 
@@ -61,7 +73,7 @@ export default function WatchlistPage() {
         })
         .filter(Boolean) as MovieItem[];
 
-      // Keeps the grid stable if duplicate rows exist in storage.
+      // Keep the grid stable if duplicate rows exist in storage.
       const seen = new Set<number>();
       const unique: MovieItem[] = [];
 
@@ -74,14 +86,14 @@ export default function WatchlistPage() {
       setItems(unique);
     }
 
-    run();
+    void run();
 
     return () => {
       alive = false;
     };
   }, [loading, user?.id, supabase]);
 
-  // Resets pagination when the dataset changes.
+  // Reset pagination whenever the dataset changes.
   useEffect(() => {
     setPage(1);
   }, [items?.length]);
@@ -92,6 +104,7 @@ export default function WatchlistPage() {
 
   const pagedItems = useMemo(() => {
     if (!items) return [];
+
     const start = (safePage - 1) * ITEMS_PER_PAGE;
     return items.slice(start, start + ITEMS_PER_PAGE);
   }, [items, safePage]);
@@ -110,12 +123,14 @@ export default function WatchlistPage() {
       <section className="container py-8 sm:py-10">
         <div className="card p-6 text-center sm:p-7">
           <h1 className="text-2xl font-extrabold">Sign in to view Watchlist</h1>
+
           <p className="mt-2 text-[--color-muted]">Your intent list lives here.</p>
 
           <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
             <Link className="btn btn-primary" href="/login?from=/watchlist">
               Sign in
             </Link>
+
             <Link className="btn btn-ghost" href="/signup">
               Create account
             </Link>

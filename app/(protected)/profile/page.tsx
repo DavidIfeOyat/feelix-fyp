@@ -1,16 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
+
+import { FollowersModal } from "@/components/features/profile/FollowersModal";
+import { MountRushmoreSection } from "@/components/features/profile/MountRushmoreSection";
+import { ProfileHero } from "@/components/features/profile/ProfileHero";
+import { SettingsModal } from "@/components/features/profile/SettingsModal";
+import { UpcomingWatchReminders } from "@/components/features/profile/UpcomingWatchReminders";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfileHub } from "@/hooks/useProfileHub";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
-
-import { ProfileHero } from "@/components/features/profile/ProfileHero";
-import { MountRushmoreSection } from "@/components/features/profile/MountRushmoreSection";
-import { UpcomingWatchReminders } from "@/components/features/profile/UpcomingWatchReminders";
-import { FollowersModal } from "@/components/features/profile/FollowersModal";
-import { SettingsModal } from "@/components/features/profile/SettingsModal";
 
 function LoadingShell({ title }: { title: string }) {
   return (
@@ -20,6 +20,7 @@ function LoadingShell({ title }: { title: string }) {
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
             Feelix profile
           </p>
+
           <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
             {title}
           </h1>
@@ -36,10 +37,14 @@ function LoadingShell({ title }: { title: string }) {
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const hub = useProfileHub(user?.id);
+
+  // Stable client instance passed into profile-related modals.
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [banner, setBanner] = useState<string | null>(null);
-  const [socialKind, setSocialKind] = useState<null | "followers" | "following">(null);
+  const [socialKind, setSocialKind] = useState<null | "followers" | "following">(
+    null
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const resolvedUsername = useMemo(() => {
@@ -51,10 +56,14 @@ export default function ProfilePage() {
   const resolvedBio = hub.profile?.bio ?? "Your personal cinema hub";
 
   const heroBackdrop = useMemo(() => {
-    const first = hub.topFour.find((x): x is number => typeof x === "number" && x > 0);
+    const first = hub.topFour.find(
+      (x): x is number => typeof x === "number" && x > 0
+    );
+
     if (!first) return null;
-    const m = hub.topFourMeta[first];
-    return m?.backdrop ?? m?.poster ?? null;
+
+    const meta = hub.topFourMeta[first];
+    return meta?.backdrop ?? meta?.poster ?? null;
   }, [hub.topFour, hub.topFourMeta]);
 
   if (authLoading) {
@@ -76,8 +85,8 @@ export default function ProfilePage() {
               </h1>
 
               <p className="mt-5 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-base">
-                Your Mount Rushmore, saved identity, favourites, and personal film space live
-                here.
+                Your Mount Rushmore, saved identity, favourites, and personal
+                film space live here.
               </p>
             </div>
 

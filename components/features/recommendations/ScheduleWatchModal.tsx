@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
 import { Modal } from "@/components/shared/Modal";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
@@ -11,27 +12,38 @@ type MovieRef = {
   genreIds: number[];
 };
 
-const MAX_PLANNED_WATCHES = 6;
-
-function dateInputValue(daysAhead = 2) {
-  const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
-
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-export function ScheduleWatchModal(props: {
+type ScheduleWatchModalProps = {
   open: boolean;
   userId: string;
   movie: MovieRef | null;
   onClose: () => void;
   onSaved: (msg: string) => void;
-}) {
-  const { open, userId, movie, onClose, onSaved } = props;
+};
+
+type PlannedWatchRow = {
+  external_id?: unknown;
+};
+
+const MAX_PLANNED_WATCHES = 6;
+
+function dateInputValue(daysAhead = 2) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysAhead);
+
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function ScheduleWatchModal({
+  open,
+  userId,
+  movie,
+  onClose,
+  onSaved,
+}: ScheduleWatchModalProps) {
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [plannedFor, setPlannedFor] = useState(dateInputValue(2));
@@ -40,6 +52,7 @@ export function ScheduleWatchModal(props: {
 
   useEffect(() => {
     if (!open) return;
+
     setPlannedFor(dateInputValue(2));
     setErr(null);
   }, [open, movie?.tmdbId]);
@@ -58,11 +71,18 @@ export function ScheduleWatchModal(props: {
 
       if (existingErr) throw existingErr;
 
-      const rows = Array.isArray(existingRows) ? existingRows : [];
-      const alreadyExists = rows.some((row: any) => String(row?.external_id ?? "") === String(movie.tmdbId));
+      const rows = Array.isArray(existingRows)
+        ? (existingRows as PlannedWatchRow[])
+        : [];
+
+      const alreadyExists = rows.some(
+        (row) => String(row?.external_id ?? "") === String(movie.tmdbId)
+      );
 
       if (!alreadyExists && rows.length >= MAX_PLANNED_WATCHES) {
-        throw new Error(`You can only keep ${MAX_PLANNED_WATCHES} planned watches at a time.`);
+        throw new Error(
+          `You can only keep ${MAX_PLANNED_WATCHES} planned watches at a time.`
+        );
       }
 
       const { error } = await supabase.from("planned_watches").upsert(
@@ -108,14 +128,15 @@ export function ScheduleWatchModal(props: {
             <img
               src={movie.poster ?? "/placeholder.svg"}
               alt={movie.title}
-              className="h-16 w-12 rounded-lg object-cover bg-black/20"
+              className="h-16 w-12 rounded-lg bg-black/20 object-cover"
             />
+
             <div className="min-w-0">
               <div className="font-semibold break-words">{movie.title}</div>
               <div className="text-sm text-[--color-muted]">
                 Pick a date and it will appear in your next planned watches.
               </div>
-              <div className="text-xs text-[--color-muted] mt-1">
+              <div className="mt-1 text-xs text-[--color-muted]">
                 You can keep up to {MAX_PLANNED_WATCHES} planned films at once.
               </div>
             </div>
@@ -139,6 +160,7 @@ export function ScheduleWatchModal(props: {
           <button className="btn btn-ghost" onClick={onClose} disabled={busy} type="button">
             Close
           </button>
+
           <button
             className="btn btn-primary"
             onClick={savePlan}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { tmdb, posterUrl, region } from "@/lib/tmdb/tmdb";
+
+import { posterUrl, region, tmdb } from "@/lib/tmdb/tmdb";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,29 @@ const MOOD_TO_GENRES: Record<string, string | null> = {
   romantic: "10749|35|18",
 };
 
-function discoverParams(list: string, mood: string, year?: string, sort?: string) {
+type TMDbListMovie = {
+  id?: unknown;
+  title?: unknown;
+  name?: unknown;
+  poster_path?: string | null;
+  vote_average?: number | null;
+  release_date?: string | null;
+  genre_ids?: unknown;
+};
+
+type TMDbListResponse = {
+  total_pages?: unknown;
+  total_results?: unknown;
+  results?: TMDbListMovie[];
+};
+
+// Build the discover parameter set for mood-led or shelf-led browsing.
+function discoverParams(
+  list: string,
+  mood: string,
+  year?: string,
+  sort?: string
+) {
   const params: Record<string, string> = {
     language: "en-GB",
     region,
@@ -55,6 +78,7 @@ function discoverParams(list: string, mood: string, year?: string, sort?: string
     const now = new Date();
     const lte = now.toISOString().slice(0, 10);
     const gteDate = new Date(now);
+
     gteDate.setDate(gteDate.getDate() - 120);
 
     params.sort_by = "primary_release_date.desc";
@@ -70,6 +94,7 @@ function discoverParams(list: string, mood: string, year?: string, sort?: string
   return params;
 }
 
+// Build the search parameter set for direct title search.
 function searchParams(query: string, year?: string) {
   const params: Record<string, string> = {
     language: "en-GB",
@@ -85,16 +110,25 @@ function searchParams(query: string, year?: string) {
   return params;
 }
 
-function mapMovie(movie: any) {
+// Map raw TMDb results into the smaller frontend-facing film shape.
+function mapMovie(movie: TMDbListMovie) {
+  const genreIds = Array.isArray(movie?.genre_ids)
+    ? movie.genre_ids
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id))
+    : [];
+
   return {
     tmdbId: Number(movie?.id),
     title: String(movie?.title ?? movie?.name ?? "Untitled"),
     poster: posterUrl(movie?.poster_path, "w500"),
-    rating: typeof movie?.vote_average === "number" ? movie.vote_average : null,
-    year: typeof movie?.release_date === "string" ? movie.release_date.slice(0, 4) : "",
-    genres: Array.isArray(movie?.genre_ids)
-      ? movie.genre_ids.map((id: number) => GENRE_NAMES[id]).filter(Boolean)
-      : [],
+    rating:
+      typeof movie?.vote_average === "number" ? movie.vote_average : null,
+    year:
+      typeof movie?.release_date === "string"
+        ? movie.release_date.slice(0, 4)
+        : "",
+    genres: genreIds.map((id) => GENRE_NAMES[id]).filter(Boolean),
   };
 }
 
@@ -108,6 +142,7 @@ export async function GET(req: Request) {
     const year = sp.get("year") || undefined;
     const sort = sp.get("sort") || undefined;
 
+    // The route accepts a limit parameter, but it is capped to the intended UI page size.
     const requestedLimit = Number(sp.get("limit") || FILMS_PER_PAGE);
     const limit = Number.isFinite(requestedLimit)
       ? Math.max(1, Math.min(FILMS_PER_PAGE, Math.floor(requestedLimit)))
@@ -118,37 +153,58 @@ export async function GET(req: Request) {
 
     const isSearch = q.trim().length > 0;
     const path = isSearch ? "/search/movie" : "/discover/movie";
-    const params = isSearch ? searchParams(q.trim(), year) : discoverParams(list, mood, year, sort);
+    const params = isSearch
+      ? searchParams(q.trim(), year)
+      : discoverParams(list, mood, year, sort);
 
-    const meta = await tmdb<any>(path, { ...params, page: 1 }, { revalidate: false });
+    // Fetch page 1 first so we can calculate the available result range cleanly.
+    const meta = await tmdb<TMDbListResponse>(
+      path,
+      { ...params, page: 1 },
+      { revalidate: false }
+    );
 
     const tmdbTotalPages = Math.max(1, Number(meta?.total_pages ?? 1));
     const tmdbTotalResults = Math.max(0, Number(meta?.total_results ?? 0));
-    const accessibleResults = Math.min(tmdbTotalResults, tmdbTotalPages * TMDB_PAGE_SIZE);
+    const accessibleResults = Math.min(
+      tmdbTotalResults,
+      tmdbTotalPages * TMDB_PAGE_SIZE
+    );
     const totalPages = Math.max(1, Math.ceil(accessibleResults / limit));
 
     if (page > totalPages) {
       return NextResponse.json({ items: [], page, totalPages });
     }
 
+    // TMDb only returns 20 results per request, so the API may need to read
+    // across multiple TMDb pages to fill a single frontend page cleanly.
     const start = (page - 1) * limit;
     const startTmdbPage = Math.floor(start / TMDB_PAGE_SIZE) + 1;
     const maxPagesToCheck = Math.min(tmdbTotalPages, startTmdbPage + 5);
 
-    const unique: any[] = [];
+    const unique: TMDbListMovie[] = [];
     const seen = new Set<number>();
 
-    for (let tmdbPage = startTmdbPage; tmdbPage <= maxPagesToCheck; tmdbPage++) {
+    for (
+      let tmdbPage = startTmdbPage;
+      tmdbPage <= maxPagesToCheck;
+      tmdbPage++
+    ) {
       const json =
         tmdbPage === 1
           ? meta
-          : await tmdb<any>(path, { ...params, page: tmdbPage }, { revalidate: false });
+          : await tmdb<TMDbListResponse>(
+              path,
+              { ...params, page: tmdbPage },
+              { revalidate: false }
+            );
 
       const results = Array.isArray(json?.results) ? json.results : [];
 
       for (const movie of results) {
         const id = Number(movie?.id);
         if (!Number.isFinite(id) || seen.has(id)) continue;
+
         seen.add(id);
         unique.push(movie);
       }
@@ -160,10 +216,14 @@ export async function GET(req: Request) {
     const items = unique.slice(0, limit).map(mapMovie);
 
     return NextResponse.json({ items, page, totalPages });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("api/films error:", error);
+
     return NextResponse.json(
-      { error: error?.message ?? "Failed to load films." },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to load films.",
+      },
       { status: 500 }
     );
   }

@@ -2,17 +2,24 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+
 import FilmLibraryActions from "@/components/features/films/FilmLibraryActions";
 import { ScheduleWatchModal } from "@/components/features/recommendations/ScheduleWatchModal";
+import { useAuth } from "@/hooks/useAuth";
 
-export default function FilmDetailActionBar(props: {
+type FilmDetailActionBarProps = {
   tmdbId: number;
   title: string;
   poster: string | null;
   genreIds: number[];
-}) {
-  const { tmdbId, title, poster, genreIds } = props;
+};
+
+export default function FilmDetailActionBar({
+  tmdbId,
+  title,
+  poster,
+  genreIds,
+}: FilmDetailActionBarProps) {
   const { user, loading } = useAuth();
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -20,6 +27,7 @@ export default function FilmDetailActionBar(props: {
 
   return (
     <div className="grid gap-3">
+      {/* Desktop / tablet action layout */}
       <div className="hidden sm:block">
         <div className="grid gap-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
@@ -43,7 +51,10 @@ export default function FilmDetailActionBar(props: {
                 Plan to Watch
               </button>
             ) : (
-              <Link className="btn btn-ghost" href={`/login?from=/films/${tmdbId}`}>
+              <Link
+                href={`/login?from=/films/${tmdbId}`}
+                className="btn btn-ghost"
+              >
                 Plan to Watch
               </Link>
             )}
@@ -51,6 +62,7 @@ export default function FilmDetailActionBar(props: {
         </div>
       </div>
 
+      {/* Mobile collapsible action layout */}
       <div className="sm:hidden">
         <details className="group border-2 border-black bg-[var(--surface)]">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--foreground)]">
@@ -64,8 +76,8 @@ export default function FilmDetailActionBar(props: {
             >
               <path
                 fillRule="evenodd"
-                d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.1 1.02l-4.25 4.5a.75.75 0 0 1-1.1 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
                 clipRule="evenodd"
+                d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.1 1.02l-4.25 4.5a.75.75 0 0 1-1.1 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
               />
             </svg>
           </summary>
@@ -89,7 +101,10 @@ export default function FilmDetailActionBar(props: {
                   Plan to Watch
                 </button>
               ) : (
-                <Link className="btn btn-ghost" href={`/login?from=/films/${tmdbId}`}>
+                <Link
+                  href={`/login?from=/films/${tmdbId}`}
+                  className="btn btn-ghost"
+                >
                   Plan to Watch
                 </Link>
               )}

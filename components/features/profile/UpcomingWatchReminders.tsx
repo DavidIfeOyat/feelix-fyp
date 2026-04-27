@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 type PlannedWatch = {
@@ -10,6 +11,17 @@ type PlannedWatch = {
   title: string;
   poster: string | null;
   planned_for: string;
+};
+
+type UpcomingWatchRemindersProps = {
+  userId: string;
+};
+
+type ReminderCardProps = {
+  item: PlannedWatch;
+  busyAction: "remove" | "watched" | null;
+  onRemove: () => void;
+  onMarkWatched: () => void;
 };
 
 const MAX_VISIBLE_PLANNED_WATCHES = 4;
@@ -46,13 +58,12 @@ function statusForDate(plannedFor: string) {
   return { label: "Upcoming" };
 }
 
-function ReminderCard(props: {
-  item: PlannedWatch;
-  busyAction: "remove" | "watched" | null;
-  onRemove: () => void;
-  onMarkWatched: () => void;
-}) {
-  const { item, busyAction, onRemove, onMarkWatched } = props;
+function ReminderCard({
+  item,
+  busyAction,
+  onRemove,
+  onMarkWatched,
+}: ReminderCardProps) {
   const tmdbId = Number(item.external_id);
   const dateText = formatPlannedDate(item.planned_for);
   const status = statusForDate(item.planned_for);
@@ -115,8 +126,9 @@ function ReminderCard(props: {
   );
 }
 
-export function UpcomingWatchReminders({ userId }: { userId: string }) {
+export function UpcomingWatchReminders({ userId }: UpcomingWatchRemindersProps) {
   const supabase = useMemo(() => createSupabaseBrowser(), []);
+
   const [rows, setRows] = useState<PlannedWatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
@@ -141,7 +153,10 @@ export function UpcomingWatchReminders({ userId }: { userId: string }) {
     void load();
   }, [supabase, userId]);
 
-  const visibleRows = useMemo(() => rows.slice(0, MAX_VISIBLE_PLANNED_WATCHES), [rows]);
+  const visibleRows = useMemo(
+    () => rows.slice(0, MAX_VISIBLE_PLANNED_WATCHES),
+    [rows]
+  );
 
   async function removeReminder(item: PlannedWatch) {
     setBusyId(item.id);
@@ -239,9 +254,11 @@ export function UpcomingWatchReminders({ userId }: { userId: string }) {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Planned watches
             </p>
+
             <h2 className="mt-3 text-2xl font-extrabold uppercase leading-[0.95] tracking-[-0.06em] text-[var(--foreground)] sm:text-3xl">
               Next planned watches
             </h2>
+
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--muted)]">
               Keep a short list of upcoming films here.
             </p>

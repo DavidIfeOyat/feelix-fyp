@@ -312,6 +312,7 @@ function normalizePresetKey(value: string) {
 
 export function findPresetDefinition(raw: string) {
   const normalized = normalizePresetKey(raw);
+
   return (
     QUICK_PRESETS.find(
       (preset) =>

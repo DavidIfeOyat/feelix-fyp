@@ -1,43 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { useEffect, useState } from "react";
+
 import { Modal } from "@/components/shared/Modal";
+
+type SettingsProfile = {
+  display_name?: string | null;
+  username?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+  mount_rushmore_public?: boolean | null;
+  watchlist_public?: boolean | null;
+} | null;
+
+type SettingsModalProps = {
+  open: boolean;
+  onClose: () => void;
+  supabase: SupabaseClient;
+  userId: string | null;
+  profile: SettingsProfile;
+  resolvedName: string;
+  resolvedBio: string;
+  onSaved: () => Promise<void> | void;
+  onNotify: (msg: string | null) => void;
+};
 
 function panelClass(extra = "") {
   return `border-2 border-black bg-[var(--surface)] ${extra}`.trim();
 }
 
-export function SettingsModal(props: {
-  open: boolean;
-  onClose: () => void;
-  supabase: SupabaseClient;
-  userId: string | null;
-  profile: {
-    display_name?: string | null;
-    username?: string | null;
-    bio?: string | null;
-    avatar_url?: string | null;
-    mount_rushmore_public?: boolean | null;
-    watchlist_public?: boolean | null;
-  } | null;
-  resolvedName: string;
-  resolvedBio: string;
-  onSaved: () => Promise<void> | void;
-  onNotify: (msg: string | null) => void;
-}) {
-  const {
-    open,
-    onClose,
-    supabase,
-    userId,
-    profile,
-    resolvedName,
-    resolvedBio,
-    onSaved,
-    onNotify,
-  } = props;
-
+export function SettingsModal({
+  open,
+  onClose,
+  supabase,
+  userId,
+  profile,
+  resolvedName,
+  resolvedBio,
+  onSaved,
+  onNotify,
+}: SettingsModalProps) {
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
 
@@ -104,11 +107,13 @@ export function SettingsModal(props: {
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
       const path = `${userId}/${Date.now()}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
-        upsert: true,
-        cacheControl: "3600",
-        contentType: file.type || "image/jpeg",
-      });
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: file.type || "image/jpeg",
+        });
 
       if (uploadError) throw uploadError;
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+
 import MovieCard, { type MovieItem } from "@/components/shared/MovieCard";
 
 type FilmsResponse = {
@@ -22,6 +23,13 @@ type SuggestItem = {
   poster: string;
   overview: string;
 };
+
+type FilmsExplorerState = {
+  items: MovieItem[];
+  page: number;
+  totalPages: number;
+  error?: string;
+} | null;
 
 const FILMS_PER_PAGE = 40;
 
@@ -81,9 +89,11 @@ function normalizeMovieItem(item: unknown): MovieItem | null {
 function buildYears() {
   const currentYear = new Date().getFullYear();
   const years = ["all"];
+
   for (let year = currentYear; year >= 1970; year--) {
     years.push(String(year));
   }
+
   return years;
 }
 
@@ -98,12 +108,7 @@ export default function FilmsExplorer() {
   const page = clamp(Number(sp.get("page") || "1"), 1, 9999);
 
   const years = useMemo(buildYears, []);
-  const [data, setData] = useState<{
-    items: MovieItem[];
-    page: number;
-    totalPages: number;
-    error?: string;
-  } | null>(null);
+  const [data, setData] = useState<FilmsExplorerState>(null);
   const [loading, setLoading] = useState(true);
 
   const searchRootRef = useRef<HTMLDivElement | null>(null);
@@ -116,6 +121,7 @@ export default function FilmsExplorer() {
   useEffect(() => {
     function onDown(e: MouseEvent) {
       if (!searchRootRef.current) return;
+
       if (!searchRootRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
@@ -148,7 +154,10 @@ export default function FilmsExplorer() {
         const json = await res.json();
         if (!alive) return;
 
-        const results = Array.isArray(json?.results) ? (json.results as SuggestItem[]) : [];
+        const results = Array.isArray(json?.results)
+          ? (json.results as SuggestItem[])
+          : [];
+
         setSuggestions(results.slice(0, 8));
         setActiveIdx(0);
         setOpen(true);
@@ -156,7 +165,9 @@ export default function FilmsExplorer() {
         if (!alive) return;
         setSuggestions([]);
       } finally {
-        if (alive) setSearchBusy(false);
+        if (alive) {
+          setSearchBusy(false);
+        }
       }
     }
 
@@ -170,7 +181,13 @@ export default function FilmsExplorer() {
   }, [q]);
 
   function setQuery(
-    next: Partial<{ list: ListMode; mood: MoodKey; sort: SortKey; year: string; page: number }>,
+    next: Partial<{
+      list: ListMode;
+      mood: MoodKey;
+      sort: SortKey;
+      year: string;
+      page: number;
+    }>,
     jumpToTop = false
   ) {
     const merged = {
@@ -207,6 +224,7 @@ export default function FilmsExplorer() {
   function goToResults() {
     const query = q.trim();
     if (!query) return;
+
     setOpen(false);
     router.push(`/results?q=${encodeURIComponent(query)}`);
   }
@@ -214,9 +232,13 @@ export default function FilmsExplorer() {
   function onSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
+
       const picked = suggestions[activeIdx];
-      if (picked) goToFilm(picked.tmdbId);
-      else goToResults();
+      if (picked) {
+        goToFilm(picked.tmdbId);
+      } else {
+        goToResults();
+      }
       return;
     }
 
@@ -224,7 +246,9 @@ export default function FilmsExplorer() {
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIdx((value) => Math.min(value + 1, Math.max(0, suggestions.length - 1)));
+      setActiveIdx((value) =>
+        Math.min(value + 1, Math.max(0, suggestions.length - 1))
+      );
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIdx((value) => Math.max(value - 1, 0));
@@ -276,6 +300,7 @@ export default function FilmsExplorer() {
         });
       } catch {
         if (!alive) return;
+
         setData({
           items: [],
           page: 1,
@@ -283,7 +308,9 @@ export default function FilmsExplorer() {
           error: "Failed to load films.",
         });
       } finally {
-        if (alive) setLoading(false);
+        if (alive) {
+          setLoading(false);
+        }
       }
     }
 
@@ -306,13 +333,15 @@ export default function FilmsExplorer() {
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
               Film explorer
             </p>
+
             <div className="mt-3 grid gap-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
               <h1 className="text-4xl font-extrabold uppercase leading-[0.9] tracking-[-0.08em] text-[var(--foreground)] sm:text-5xl md:text-6xl">
                 Browse the collection.
               </h1>
+
               <p className="max-w-xl text-sm leading-7 text-[var(--muted)] sm:text-base">
-                Explore films by collection mode, mood, year, and ranking, with quick search
-                built into the same archive view.
+                Explore films by collection mode, mood, year, and ranking, with
+                quick search built into the same archive view.
               </p>
             </div>
           </div>
@@ -322,6 +351,7 @@ export default function FilmsExplorer() {
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                 Collection mode
               </p>
+
               <div className="flex flex-wrap gap-2">
                 {LISTS.map((item) => (
                   <button
@@ -384,6 +414,7 @@ export default function FilmsExplorer() {
                               <div className="truncate text-[11px] font-bold uppercase tracking-[0.14em]">
                                 {item.title} {item.year ? `(${item.year})` : ""}
                               </div>
+
                               <div className="mt-2 line-clamp-2 text-xs opacity-80">
                                 {item.overview || "No overview available."}
                               </div>
@@ -395,6 +426,7 @@ export default function FilmsExplorer() {
 
                     <div className="flex items-center justify-between border-t-2 border-black px-4 py-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
                       <span>Press enter for full search</span>
+
                       <button
                         type="button"
                         onClick={goToResults}
@@ -413,6 +445,7 @@ export default function FilmsExplorer() {
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                   Mood filter
                 </p>
+
                 <div className="flex flex-wrap gap-2">
                   {MOODS.map((item) => (
                     <button
@@ -432,6 +465,7 @@ export default function FilmsExplorer() {
                   <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
                     Year
                   </span>
+
                   <select
                     value={year}
                     onChange={(e) => setQuery({ year: e.target.value, page: 1 })}
@@ -448,9 +482,12 @@ export default function FilmsExplorer() {
                   <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
                     Sort
                   </span>
+
                   <select
                     value={sort}
-                    onChange={(e) => setQuery({ sort: e.target.value as SortKey, page: 1 })}
+                    onChange={(e) =>
+                      setQuery({ sort: e.target.value as SortKey, page: 1 })
+                    }
                   >
                     {SORTS.map((item) => (
                       <option key={item.key} value={item.key}>
@@ -476,6 +513,7 @@ export default function FilmsExplorer() {
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                 Results
               </p>
+
               <p className="mt-2 text-sm leading-7 text-[var(--foreground)]">
                 Showing {visibleItems.length} films
               </p>
@@ -494,6 +532,7 @@ export default function FilmsExplorer() {
                     className="animate-pulse overflow-hidden border-2 border-black bg-[var(--surface)]"
                   >
                     <div className="aspect-[2/3] border-b-2 border-black bg-[var(--surface-strong)]" />
+
                     <div className="space-y-3 p-4">
                       <div className="h-3 w-20 bg-black/10" />
                       <div className="h-7 w-full bg-black/10" />
@@ -502,7 +541,9 @@ export default function FilmsExplorer() {
                     </div>
                   </div>
                 ))
-              : visibleItems.map((item) => <MovieCard key={item.tmdbId} item={item} />)}
+              : visibleItems.map((item) => (
+                  <MovieCard key={item.tmdbId} item={item} />
+                ))}
           </div>
 
           <div className="mt-8 flex flex-col gap-3 border-t-2 border-black pt-5 sm:mt-10 sm:flex-row sm:items-center sm:justify-center">

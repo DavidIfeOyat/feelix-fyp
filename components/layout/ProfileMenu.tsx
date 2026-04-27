@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+
 import { signOutAction } from "@/app/actions/auth";
 
 type ProfileMenuProps = {
@@ -20,7 +21,7 @@ export default function ProfileMenu({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // Fallbacks prevent runtime crashes if a prop is missing.
+  // Safe fallbacks prevent runtime issues if a link prop is omitted.
   const safeProfileHref = profileHref ?? "/profile";
   const safeWatchlistHref = watchlistHref ?? "/watchlist";
   const safeFavoritesHref = favoritesHref ?? "/favorites";
@@ -29,6 +30,7 @@ export default function ProfileMenu({
   useEffect(() => {
     function onDown(e: MouseEvent) {
       if (!rootRef.current) return;
+
       if (!rootRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
@@ -43,7 +45,6 @@ export default function ProfileMenu({
 
   return (
     <div ref={rootRef} className="relative">
-      {/* Account trigger */}
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -63,8 +64,8 @@ export default function ProfileMenu({
         >
           <path
             fillRule="evenodd"
-            d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.1 1.02l-4.25 4.5a.75.75 0 0 1-1.1 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
             clipRule="evenodd"
+            d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.1 1.02l-4.25 4.5a.75.75 0 0 1-1.1 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
           />
         </svg>
       </button>
@@ -120,7 +121,6 @@ export default function ProfileMenu({
 
           <div className="h-px bg-white/10" />
 
-          {/* Existing sign-out server action */}
           <form
             action={async () => {
               setOpen(false);

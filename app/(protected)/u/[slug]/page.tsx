@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+import PublicMovieCard from "@/components/shared/PublicMovieCard";
+import type { MovieItem } from "@/components/shared/MovieCard";
 import { useAuth } from "@/hooks/useAuth";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
-import type { MovieItem } from "@/components/shared/MovieCard";
-import PublicMovieCard from "@/components/shared/PublicMovieCard";
 
 type ProfileRow = {
   user_id: string;
@@ -25,13 +26,16 @@ type Mini = {
   poster: string | null;
 };
 
-function isUuid(s: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
 }
 
 async function fetchMini(tmdbId: number) {
   const res = await fetch(`/api/tmdb/movie/${tmdbId}`, { cache: "no-store" });
   if (!res.ok) return null;
+
   const j = await res.json();
 
   return {
@@ -45,10 +49,10 @@ function dedupeMovies(items: MovieItem[]) {
   const seen = new Set<number>();
   const out: MovieItem[] = [];
 
-  for (const it of items) {
-    if (seen.has(it.tmdbId)) continue;
-    seen.add(it.tmdbId);
-    out.push(it);
+  for (const item of items) {
+    if (seen.has(item.tmdbId)) continue;
+    seen.add(item.tmdbId);
+    out.push(item);
   }
 
   return out;
@@ -65,6 +69,7 @@ function EmptyPanel({ text }: { text: string }) {
 export default function UserProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const supabase = useMemo(() => createSupabaseBrowser(), []);
+
   const params = useParams<{ slug: string }>();
   const slug = decodeURIComponent(String(params.slug || ""));
 
@@ -89,6 +94,8 @@ export default function UserProfilePage() {
 
       let prof: ProfileRow | null = null;
 
+      // Prefer username-based lookup first. Fall back to UUID lookup so
+      // member profiles remain accessible even if a username is missing.
       {
         const { data, error } = await supabase
           .from("profiles")
@@ -140,8 +147,16 @@ export default function UserProfilePage() {
       const targetId = String(prof.user_id);
 
       const [followersQ, followingQ, relQ] = await Promise.all([
-        supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", targetId),
-        supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", targetId),
+        supabase
+          .from("follows")
+          .select("*", { count: "exact", head: true })
+          .eq("following_id", targetId),
+
+        supabase
+          .from("follows")
+          .select("*", { count: "exact", head: true })
+          .eq("follower_id", targetId),
+
         supabase
           .from("follows")
           .select("following_id")
@@ -156,7 +171,8 @@ export default function UserProfilePage() {
       setFollowing(Number(followingQ.count ?? 0));
       setIsFollowingState(Boolean(relQ.data));
 
-      const canSeeMount = Boolean(prof.mount_rushmore_public ?? true) || targetId === user.id;
+      const canSeeMount =
+        Boolean(prof.mount_rushmore_public ?? true) || targetId === user.id;
 
       if (canSeeMount) {
         const ids = Array.isArray(prof.top_four_ids) ? prof.top_four_ids : [];
@@ -169,9 +185,10 @@ export default function UserProfilePage() {
         if (!alive) return;
 
         const next: Record<number, Mini> = {};
-        for (const m of minis) {
-          if (m?.tmdbId) next[m.tmdbId] = m;
+        for (const mini of minis) {
+          if (mini?.tmdbId) next[mini.tmdbId] = mini;
         }
+
         setMountMeta(next);
       } else {
         setMountMeta({});
@@ -189,21 +206,23 @@ export default function UserProfilePage() {
         setWatchlist([]);
       } else {
         const mapped: MovieItem[] = (wl ?? [])
-          .map((r: {
-            external_id?: string;
-            title?: string;
-            poster?: string;
-            payload?: { tmdbId?: number };
-          }) => {
-            const tmdbId = Number(r?.payload?.tmdbId ?? r?.external_id);
-            if (!Number.isFinite(tmdbId)) return null;
+          .map(
+            (row: {
+              external_id?: string;
+              title?: string;
+              poster?: string;
+              payload?: { tmdbId?: number };
+            }) => {
+              const tmdbId = Number(row?.payload?.tmdbId ?? row?.external_id);
+              if (!Number.isFinite(tmdbId)) return null;
 
-            return {
-              tmdbId,
-              title: String(r?.title ?? "Untitled"),
-              poster: String(r?.poster ?? "/placeholder.svg"),
-            };
-          })
+              return {
+                tmdbId,
+                title: String(row?.title ?? "Untitled"),
+                poster: String(row?.poster ?? "/placeholder.svg"),
+              };
+            }
+          )
           .filter(Boolean) as MovieItem[];
 
         setWatchlist(dedupeMovies(mapped));
@@ -234,6 +253,7 @@ export default function UserProfilePage() {
           .eq("following_id", p.user_id);
 
         if (error) throw error;
+
         setIsFollowingState(false);
         setFollowers((n) => Math.max(0, n - 1));
       } else {
@@ -242,7 +262,11 @@ export default function UserProfilePage() {
           following_id: p.user_id,
         });
 
-        if (error && (error as { code?: string }).code !== "23505") throw error;
+        // Ignore duplicate relation errors so the UI still converges safely.
+        if (error && (error as { code?: string }).code !== "23505") {
+          throw error;
+        }
+
         setIsFollowingState(true);
         setFollowers((n) => n + 1);
       }
@@ -259,6 +283,7 @@ export default function UserProfilePage() {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Public profile
             </p>
+
             <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
               Loading Profile
             </h1>
@@ -272,19 +297,20 @@ export default function UserProfilePage() {
     return (
       <section className="container py-8 sm:py-10">
         <div className="mx-auto max-w-4xl border-2 border-black bg-[var(--surface)]">
-          <div className="grid gap-4 p-4 sm:p-6 md:grid-cols-[1fr_auto] md:items-end md:p-8">
+          <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end lg:p-8">
             <div>
               <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                 Public profile
               </p>
+
               <h1 className="mt-4 text-3xl font-extrabold uppercase leading-[0.92] tracking-[-0.08em] text-[var(--foreground)] sm:text-5xl">
                 Sign in to view profiles.
               </h1>
             </div>
 
             <Link
-              className="btn btn-primary text-center"
               href={`/login?from=/u/${encodeURIComponent(slug)}`}
+              className="btn btn-primary text-center lg:w-auto"
             >
               Sign In
             </Link>
@@ -302,6 +328,7 @@ export default function UserProfilePage() {
             <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
               Public profile
             </p>
+
             <h1 className="mt-3 text-3xl font-extrabold uppercase leading-none tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
               Loading Profile
             </h1>
@@ -327,64 +354,72 @@ export default function UserProfilePage() {
   return (
     <section className="container py-8 sm:py-10">
       <div className="grid gap-6">
-        <section className="border-2 border-black bg-[var(--surface)] overflow-hidden">
-          <div className="grid border-b-2 border-black sm:grid-cols-3">
-            <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
+        <section className="overflow-hidden border-2 border-black bg-[var(--surface)]">
+          <div className="hidden border-b-2 border-black md:grid md:grid-cols-3">
+            <div className="border-r-2 border-black px-4 py-3 text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
               Public profile
             </div>
-            <div className="border-b border-black px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:border-b-0 sm:border-r-2 sm:text-[10px]">
+            <div className="border-r-2 border-black px-4 py-3 text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
               Taste display
             </div>
-            <div className="px-4 py-3 text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
+            <div className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
               Shared collection
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="border-b-2 border-black p-4 sm:p-6 md:p-8 lg:border-b-0 lg:border-r-2">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="h-20 w-20 shrink-0 border-2 border-black bg-[var(--surface-strong)] sm:h-28 sm:w-28">
+          <div className="grid gap-0 xl:grid-cols-[1.02fr_0.98fr]">
+            <div className="border-b-2 border-black p-4 sm:p-6 lg:p-8 xl:border-b-0 xl:border-r-2">
+              <div className="grid grid-cols-[72px_1fr] gap-4 md:grid-cols-[88px_1fr] md:gap-5">
+                <div className="h-[72px] w-[72px] border-2 border-black bg-[var(--surface-strong)] md:h-[88px] md:w-[88px]">
                   {p.avatar_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.avatar_url} alt="avatar" className="h-full w-full object-cover" />
+                    <img
+                      src={p.avatar_url}
+                      alt="avatar"
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
-                    <div className="grid h-full w-full place-items-center text-3xl font-extrabold uppercase tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
+                    <div className="grid h-full w-full place-items-center text-2xl font-extrabold uppercase tracking-[-0.06em] text-[var(--foreground)] md:text-3xl">
                       {p.display_name.slice(0, 1).toUpperCase()}
                     </div>
                   )}
                 </div>
 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0">
                   <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                     Member
                   </p>
 
-                  <h1 className="mt-3 break-words text-3xl font-extrabold uppercase leading-[0.92] tracking-[-0.08em] text-[var(--foreground)] sm:text-5xl">
+                  <h1 className="mt-3 break-all text-[1.8rem] font-extrabold uppercase leading-[0.92] tracking-[-0.08em] text-[var(--foreground)] sm:break-words sm:text-4xl lg:text-5xl">
                     {p.display_name}
                   </h1>
 
                   <p className="mt-2 break-all text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)] sm:text-[11px]">
                     {handle}
                   </p>
-
-                  <p className="mt-4 max-w-2xl break-words text-sm leading-7 text-[var(--foreground)] sm:text-base">
-                    {p.bio ?? "Your personal cinema hub"}
-                  </p>
                 </div>
               </div>
 
-              <div className="mt-6 border-t-2 border-black pt-4 sm:mt-8 sm:pt-5">
+              <p className="mt-4 max-w-2xl break-words text-sm leading-7 text-[var(--foreground)] sm:text-base">
+                {p.bio ?? "Your personal cinema hub"}
+              </p>
+
+              <div className="mt-6 border-t-2 border-black pt-4 md:mt-7">
                 <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                   Actions
                 </p>
 
-                <div className="mt-4 grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-2">
+                <div className="mt-4 grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 2xl:grid-cols-2">
                   <Link href="/people" className="btn btn-ghost text-center">
                     Find People
                   </Link>
 
                   {!isSelf ? (
-                    <button className="btn btn-primary text-center" onClick={toggleFollow} type="button">
+                    <button
+                      type="button"
+                      className="btn btn-primary text-center"
+                      onClick={toggleFollow}
+                    >
                       {isFollowingState ? "Following" : "Follow"}
                     </button>
                   ) : (
@@ -402,11 +437,12 @@ export default function UserProfilePage() {
               ) : null}
             </div>
 
-            <div className="grid gap-4 p-4 sm:p-6 md:p-8">
+            <div className="grid gap-4 p-4 sm:p-6 lg:p-8">
               <div className="border-b-2 border-black pb-4">
                 <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                   Social stats
                 </p>
+
                 <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
                   A quick view of this member’s public film presence.
                 </p>
@@ -417,7 +453,7 @@ export default function UserProfilePage() {
                   <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] sm:text-[10px]">
                     Followers
                   </p>
-                  <p className="mt-2 text-2xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)] sm:text-3xl">
+                  <p className="mt-2 text-2xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)] md:text-3xl">
                     {followers}
                   </p>
                 </div>
@@ -426,7 +462,7 @@ export default function UserProfilePage() {
                   <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] sm:text-[10px]">
                     Following
                   </p>
-                  <p className="mt-2 text-2xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)] sm:text-3xl">
+                  <p className="mt-2 text-2xl font-extrabold uppercase leading-none tracking-[-0.05em] text-[var(--foreground)] md:text-3xl">
                     {following}
                   </p>
                 </div>
@@ -436,10 +472,12 @@ export default function UserProfilePage() {
                 <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                   Visibility
                 </p>
+
                 <div className="mt-3 grid gap-2 min-[420px]:grid-cols-2">
                   <div className="border border-black px-4 py-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--foreground)]">
                     Mount Rushmore {canSeeMount ? "Visible" : "Private"}
                   </div>
+
                   <div className="border border-black px-4 py-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--foreground)]">
                     Watchlist {canSeeWatchlist ? "Visible" : "Private"}
                   </div>
@@ -456,6 +494,7 @@ export default function UserProfilePage() {
                 <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                   Mount Rushmore
                 </p>
+
                 <h2 className="mt-3 text-2xl font-extrabold uppercase leading-[0.95] tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
                   Four defining films.
                 </h2>
@@ -470,7 +509,7 @@ export default function UserProfilePage() {
           </div>
 
           {canSeeMount ? (
-            <div className="grid grid-cols-2 gap-3 p-4 sm:gap-4 sm:p-6 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 p-4 sm:gap-4 sm:p-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => {
                 const id = Array.isArray(p.top_four_ids) ? p.top_four_ids[i] : null;
                 const tmdbId = Number(id);
@@ -484,7 +523,11 @@ export default function UserProfilePage() {
                     <div className="aspect-[2/3] bg-[var(--surface)]">
                       {meta?.poster ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={meta.poster} alt={meta.title} className="h-full w-full object-cover" />
+                        <img
+                          src={meta.poster}
+                          alt={meta.title}
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
                         <div className="grid h-full w-full place-items-center px-3 text-center text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--muted)] sm:text-[10px]">
                           {Number.isFinite(tmdbId) ? "Loading..." : "Empty"}
@@ -515,6 +558,7 @@ export default function UserProfilePage() {
                 <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--muted)] sm:text-[10px]">
                   Watchlist
                 </p>
+
                 <h2 className="mt-3 text-2xl font-extrabold uppercase leading-[0.95] tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl">
                   Saved films.
                 </h2>
@@ -534,9 +578,9 @@ export default function UserProfilePage() {
             ) : watchlist.length === 0 ? (
               <EmptyPanel text="No films in watchlist yet." />
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
-                {watchlist.map((it) => (
-                  <PublicMovieCard key={`pubwl-${it.tmdbId}`} item={it} />
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {watchlist.map((item) => (
+                  <PublicMovieCard key={`pubwl-${item.tmdbId}`} item={item} />
                 ))}
               </div>
             )}

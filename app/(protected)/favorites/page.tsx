@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+
 import MovieCard, { type MovieItem } from "@/components/shared/MovieCard";
 import { useAuth } from "@/hooks/useAuth";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 const LS_FAVORITES = "feelix_favorites_v1";
 const ITEMS_PER_PAGE = 40;
+
+type FavoriteRow = {
+  external_id?: unknown;
+  title?: unknown;
+  poster?: unknown;
+  payload?: {
+    tmdbId?: unknown;
+  } | null;
+};
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -21,8 +31,9 @@ function readLocal(): Record<string, MovieItem> {
   }
 }
 
-// Converts a favorites row into the smaller card shape used on the page.
-function rowToItem(row: any): MovieItem | null {
+// Convert a stored favourite row into the smaller card shape used by this page.
+// Cloud rows can arrive in slightly different shapes, so the mapping stays defensive.
+function rowToItem(row: FavoriteRow): MovieItem | null {
   if (!row) return null;
 
   const tmdbId = Number(row.payload?.tmdbId ?? row.external_id);
@@ -37,6 +48,8 @@ function rowToItem(row: any): MovieItem | null {
 
 export default function FavoritesPage() {
   const { user, loading: authLoading } = useAuth();
+
+  // Keep a stable client instance for reads from Supabase.
   const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   const [items, setItems] = useState<MovieItem[]>([]);
@@ -45,16 +58,20 @@ export default function FavoritesPage() {
   const [banner, setBanner] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
+  // Used to ignore stale async responses if a newer load starts.
   const reqId = useRef(0);
 
   async function load() {
     const myReq = ++reqId.current;
+
     setLoading(true);
     setBanner(null);
 
-    // Local data is shown first so the page does not flash empty.
+    // Show local data immediately so the grid does not briefly render empty
+    // while cloud data is being fetched.
     const localMap = readLocal();
     const localItems = Object.values(localMap).filter(Boolean);
+
     setItems(localItems);
     setSource("local");
 
@@ -87,10 +104,16 @@ export default function FavoritesPage() {
         setItems([]);
         setSource("cloud");
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (myReq !== reqId.current) return;
+
+      const message =
+        e instanceof Error ? e.message : "Cloud load failed.";
+
       setSource("local");
-      setBanner(e?.message ? `Cloud load failed: ${e.message}` : "Cloud load failed.");
+      setBanner(
+        message ? `Cloud load failed: ${message}` : "Cloud load failed."
+      );
     } finally {
       if (myReq === reqId.current) {
         setLoading(false);
@@ -100,12 +123,13 @@ export default function FavoritesPage() {
 
   useEffect(() => {
     load();
-    // load is intentionally tied to the signed-in user here
-    // so the page rehydrates cleanly when auth state changes.
+
+    // Intentionally keyed to the signed-in user so the page refreshes
+    // cleanly when auth state changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Resets pagination after a data refresh.
+  // Reset pagination whenever the data set changes.
   useEffect(() => {
     setPage(1);
   }, [items.length]);
@@ -165,6 +189,7 @@ export default function FavoritesPage() {
             <Link href="/films" className="btn btn-primary">
               Browse films
             </Link>
+
             <Link href="/" className="btn btn-ghost">
               Back home
             </Link>

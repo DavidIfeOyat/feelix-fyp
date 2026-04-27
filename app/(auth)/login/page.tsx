@@ -11,12 +11,18 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/**
+ * Restricts redirects to safe internal routes only.
+ * This avoids redirect loops back into auth pages and blocks external-style values.
+ */
 function resolveRedirect(rawFrom: string | null) {
   const fallback = "/dashboard";
 
   if (!rawFrom) return fallback;
   if (!rawFrom.startsWith("/") || rawFrom.startsWith("//")) return fallback;
-  if (rawFrom.startsWith("/login") || rawFrom.startsWith("/signup")) return fallback;
+  if (rawFrom.startsWith("/login") || rawFrom.startsWith("/signup")) {
+    return fallback;
+  }
 
   return rawFrom;
 }

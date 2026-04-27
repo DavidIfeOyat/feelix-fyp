@@ -1,23 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+
 import { useAuth } from "@/hooks/useAuth";
+import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 type Busy = null | "watchlist" | "watched" | "favorite";
 
-function logSupabaseError(label: string, e: any) {
+type FilmLibraryInput = {
+  tmdbId: number;
+  title: string;
+  poster: string;
+};
+
+type ToggleWatchedResult = "added" | "removed" | null;
+
+function logSupabaseError(label: string, error: any) {
   console.error(label, {
-    message: e?.message,
-    details: e?.details,
-    hint: e?.hint,
-    code: e?.code,
-    status: e?.status,
-    raw: e,
+    message: error?.message,
+    details: error?.details,
+    hint: error?.hint,
+    code: error?.code,
+    status: error?.status,
+    raw: error,
   });
 }
 
-export function useFilmLibrary(input: { tmdbId: number; title: string; poster: string }) {
+export function useFilmLibrary(input: FilmLibraryInput) {
   const { user } = useAuth();
   const supabase = useMemo(() => createSupabaseBrowser(), []);
   const externalId = useMemo(() => String(input.tmdbId), [input.tmdbId]);
@@ -32,6 +41,7 @@ export function useFilmLibrary(input: { tmdbId: number; title: string; poster: s
       typeof window !== "undefined"
         ? `${window.location.pathname}${window.location.search}`
         : `/films/${input.tmdbId}`;
+
     window.location.href = `/login?from=${encodeURIComponent(from)}`;
   }
 
@@ -42,10 +52,10 @@ export function useFilmLibrary(input: { tmdbId: number; title: string; poster: s
     setIsWatched(false);
     setIsFavorite(false);
 
-    (async () => {
+    async function loadLibraryState() {
       if (!user) return;
 
-      const [wl, w, fav] = await Promise.all([
+      const [watchlistQuery, watchedQuery, favoritesQuery] = await Promise.all([
         supabase
           .from("watchlist_items")
           .select("external_id")
@@ -70,10 +80,12 @@ export function useFilmLibrary(input: { tmdbId: number; title: string; poster: s
 
       if (cancelled) return;
 
-      setInWatchlist(Boolean(wl.data));
-      setIsWatched(Boolean(w.data));
-      setIsFavorite(Boolean(fav.data));
-    })();
+      setInWatchlist(Boolean(watchlistQuery.data));
+      setIsWatched(Boolean(watchedQuery.data));
+      setIsFavorite(Boolean(favoritesQuery.data));
+    }
+
+    void loadLibraryState();
 
     return () => {
       cancelled = true;
@@ -103,6 +115,7 @@ export function useFilmLibrary(input: { tmdbId: number; title: string; poster: s
   async function toggleWatchlist() {
     if (!user) return gateToLogin();
     if (busy) return;
+
     setBusy("watchlist");
 
     try {
@@ -127,18 +140,19 @@ export function useFilmLibrary(input: { tmdbId: number; title: string; poster: s
         if (error && (error as any).code !== "23505") throw error;
         setInWatchlist(true);
       }
-    } catch (e: any) {
-      logSupabaseError("toggleWatchlist failed", e);
+    } catch (error: any) {
+      logSupabaseError("toggleWatchlist failed", error);
     } finally {
       setBusy(null);
     }
   }
 
-  async function toggleWatched(): Promise<"added" | "removed" | null> {
+  async function toggleWatched(): Promise<ToggleWatchedResult> {
     if (!user) {
       gateToLogin();
       return null;
     }
+
     if (busy) return null;
 
     setBusy("watched");
@@ -152,28 +166,29 @@ export function useFilmLibrary(input: { tmdbId: number; title: string; poster: s
           .eq("external_id", externalId);
 
         if (error) throw error;
+
         setIsWatched(false);
         return "removed";
-      } else {
-        const { error } = await supabase.from("watched_items").insert({
-          user_id: user.id,
-          external_id: externalId,
-          title: input.title,
-          poster: input.poster,
-          payload: { tmdbId: input.tmdbId },
-          watched_at: new Date().toISOString(),
-        });
-
-        if (error && (error as any).code !== "23505") throw error;
-
-        setIsWatched(true);
-        await clearWatchlistIfPresent(user.id);
-        await clearPlannedWatchIfPresent(user.id);
-
-        return "added";
       }
-    } catch (e: any) {
-      logSupabaseError("toggleWatched failed", e);
+
+      const { error } = await supabase.from("watched_items").insert({
+        user_id: user.id,
+        external_id: externalId,
+        title: input.title,
+        poster: input.poster,
+        payload: { tmdbId: input.tmdbId },
+        watched_at: new Date().toISOString(),
+      });
+
+      if (error && (error as any).code !== "23505") throw error;
+
+      setIsWatched(true);
+      await clearWatchlistIfPresent(user.id);
+      await clearPlannedWatchIfPresent(user.id);
+
+      return "added";
+    } catch (error: any) {
+      logSupabaseError("toggleWatched failed", error);
       return null;
     } finally {
       setBusy(null);
@@ -208,8 +223,9 @@ export function useFilmLibrary(input: { tmdbId: number; title: string; poster: s
         if (error && (error as any).code !== "23505") throw error;
         setIsFavorite(true);
 
+        // A favourite is treated as a watched title in the current library model.
         if (!isWatched) {
-          const { error: wErr } = await supabase.from("watched_items").insert({
+          const { error: watchedError } = await supabase.from("watched_items").insert({
             user_id: user.id,
             external_id: externalId,
             title: input.title,
@@ -218,15 +234,18 @@ export function useFilmLibrary(input: { tmdbId: number; title: string; poster: s
             watched_at: new Date().toISOString(),
           });
 
-          if (wErr && (wErr as any).code !== "23505") throw wErr;
+          if (watchedError && (watchedError as any).code !== "23505") {
+            throw watchedError;
+          }
+
           setIsWatched(true);
         }
 
         await clearWatchlistIfPresent(user.id);
         await clearPlannedWatchIfPresent(user.id);
       }
-    } catch (e: any) {
-      logSupabaseError("toggleFavorite failed", e);
+    } catch (error: any) {
+      logSupabaseError("toggleFavorite failed", error);
     } finally {
       setBusy(null);
     }

@@ -11,8 +11,13 @@ type FeatureCard = {
   number: string;
 };
 
-export default function HomeFeatureGrid({ isAuthed }: { isAuthed: boolean }) {
-  const gate = (path: string) => (isAuthed ? path : `/login?from=${encodeURIComponent(path)}`);
+type HomeFeatureGridProps = {
+  isAuthed: boolean;
+};
+
+export default function HomeFeatureGrid({ isAuthed }: HomeFeatureGridProps) {
+  const gate = (path: string) =>
+    isAuthed ? path : `/login?from=${encodeURIComponent(path)}`;
 
   const cards: FeatureCard[] = [
     {
@@ -58,7 +63,7 @@ export default function HomeFeatureGrid({ isAuthed }: { isAuthed: boolean }) {
 
         <div className="mt-3 grid gap-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
           <h2 className="max-w-4xl text-3xl font-extrabold uppercase leading-[0.92] tracking-[-0.06em] text-[var(--foreground)] sm:text-4xl md:text-5xl">
-            Film discovery that feels curated, organised, and personal.
+            Film discovery that feels personal.
           </h2>
 
           <p className="max-w-xl text-sm leading-7 text-[var(--muted)] sm:text-base">

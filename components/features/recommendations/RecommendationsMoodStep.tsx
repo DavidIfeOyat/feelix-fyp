@@ -1,10 +1,14 @@
 "use client";
 
 import type { CSSProperties, RefObject } from "react";
-import * as recoConfig from "@/lib/reco/config";
-import type { QuickPreset } from "@/lib/reco/config";
 
-type FeelingOption = { value: string; label: string };
+import type { QuickPreset } from "@/lib/reco/config";
+import * as recoConfig from "@/lib/reco/config";
+
+type FeelingOption = {
+  value: string;
+  label: string;
+};
 
 export type RecommendationsMoodStepProps = {
   quickPresets: readonly QuickPreset[];
@@ -94,6 +98,7 @@ export function RecommendationsMoodStep({
             >
               ←
             </button>
+
             <button
               className="btn btn-ghost"
               onClick={() => slidePresets("next")}
@@ -125,6 +130,7 @@ export function RecommendationsMoodStep({
                     <div className="text-2xl font-black tracking-tight text-white">
                       {preset.label}
                     </div>
+
                     <p className="mt-2 max-w-sm text-sm text-white">
                       {preset.description}
                     </p>
